@@ -1,16 +1,14 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Raven.Client.Shard;
-using Raven.Client;
-
+//-----------------------------------------------------------------------
+// <copyright file="Company.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 namespace Raven.Sample.ShardClient
 {
-    public class Company
-    {
-        public string Id { get; set; }
-        public string Name { get; set; }
-        public string Region { get; set; }
-    }
+	public class Company
+	{
+		public string Id { get; set; }
+		public string Name { get; set; }
+		public string Region { get; set; }
+	}
 }

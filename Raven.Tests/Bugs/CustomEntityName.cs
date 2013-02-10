@@ -1,3 +1,8 @@
+//-----------------------------------------------------------------------
+// <copyright file="CustomEntityName.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.Linq;
 using Raven.Client.Document;
@@ -5,7 +10,7 @@ using Xunit;
 
 namespace Raven.Tests.Bugs
 {
-	public class CustomEntityName : LocalClientTest
+	public class CustomEntityName : RavenTest
 	{
 		[Fact]
 		public void CanCustomizeEntityName()
@@ -24,8 +29,8 @@ namespace Raven.Tests.Bugs
 				{
 					var typeName = ReflectionUtil.GetFullNameWithoutVersionInformation(typeof(Foo));
 					var all = session
-                        .Advanced
-                        .LuceneQuery<Foo>("Raven/DocumentsByEntityName")
+						.Advanced
+						.LuceneQuery<Foo>("Raven/DocumentsByEntityName")
 						.Where("Tag:[[" + typeName + "]]")
 						.WaitForNonStaleResultsAsOfNow(TimeSpan.MaxValue)
 						.ToList();

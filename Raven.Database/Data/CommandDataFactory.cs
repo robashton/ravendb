@@ -1,14 +1,20 @@
+//-----------------------------------------------------------------------
+// <copyright file="CommandDataFactory.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using Raven.Abstractions.Commands;
+using Raven.Abstractions.Data;
 using Raven.Database.Json;
-using Raven.Http;
+using Raven.Json.Linq;
 
 namespace Raven.Database.Data
 {
 	public static class CommandDataFactory
 	{
-		public static ICommandData CreateCommand(JObject jsonCommand, TransactionInformation transactionInformation)
+		public static ICommandData CreateCommand(RavenJObject jsonCommand, TransactionInformation transactionInformation)
 		{
 			var key = jsonCommand["Key"].Value<string>();
 			switch (jsonCommand.Value<string>("Method"))
@@ -18,8 +24,8 @@ namespace Raven.Database.Data
 					{
 						Key = key,
 						Etag = GetEtagFromCommand(jsonCommand),
-						Document = jsonCommand["Document"] as JObject,
-						Metadata = jsonCommand["Metadata"] as JObject,
+						Document = jsonCommand["Document"] as RavenJObject,
+						Metadata = jsonCommand["Metadata"] as RavenJObject,
 						TransactionInformation = transactionInformation
 					};
 				case "DELETE":
@@ -36,17 +42,27 @@ namespace Raven.Database.Data
 						Etag = GetEtagFromCommand(jsonCommand),
 						TransactionInformation = transactionInformation,
 						Patches = jsonCommand
-							.Value<JArray>("Patches")
-							.Cast<JObject>()
+							.Value<RavenJArray>("Patches")
+							.Cast<RavenJObject>()
 							.Select(PatchRequest.FromJson)
 							.ToArray()
 					};
+				case "EVAL":
+					var debug = jsonCommand["DebugMode"].Value<bool>();
+					return new ScriptedPatchCommandData
+					{
+						Key = key,
+						Etag = GetEtagFromCommand(jsonCommand),
+						TransactionInformation = transactionInformation,
+						Patch = ScriptedPatchRequest.FromJson(jsonCommand.Value<RavenJObject>("Patch")),
+						DebugMode = debug
+					};
 				default:
-					throw new ArgumentException("Batching only supports PUT, PATCH and DELETE.");
+					throw new ArgumentException("Batching only supports PUT, PATCH, EVAL and DELETE.");
 			}
 		}
 
-		private static Guid? GetEtagFromCommand(JToken jsonCommand)
+		private static Guid? GetEtagFromCommand(RavenJObject jsonCommand)
 		{
 			return jsonCommand["Etag"] != null && jsonCommand["Etag"].Value<string>() != null ? new Guid(jsonCommand["Etag"].Value<string>()) : (Guid?)null;
 		}

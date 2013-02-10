@@ -1,7 +1,12 @@
+//-----------------------------------------------------------------------
+// <copyright file="DaCollationAnalyzer.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 namespace Raven.Database.Indexing.Collation.Cultures
 {
-    
-    public class DaCollationAnalyzer : AbstractCultureCollationAnalyzer
-    {
-    }
+	
+	public class DaCollationAnalyzer : AbstractCultureCollationAnalyzer
+	{
+	}
 }

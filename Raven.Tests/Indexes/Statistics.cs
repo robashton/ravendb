@@ -1,45 +1,48 @@
+//-----------------------------------------------------------------------
+// <copyright file="Statistics.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.Threading;
-using Newtonsoft.Json.Linq;
+using Raven.Abstractions.Data;
+using Raven.Abstractions.Indexing;
+using Raven.Client.Embedded;
+using Raven.Json.Linq;
 using Raven.Database;
 using Raven.Database.Config;
-using Raven.Database.Data;
-using Raven.Database.Indexing;
 using Raven.Tests.Storage;
 using Xunit;
 using System.Linq;
 
 namespace Raven.Tests.Indexes
 {
-	public class Statistics : AbstractDocumentStorageTest
+	public class Statistics : RavenTest
 	{
+		private readonly EmbeddableDocumentStore store;
 		private readonly DocumentDatabase db;
 
 		public Statistics()
 		{
-			db = new DocumentDatabase(new RavenConfiguration {DataDirectory = "raven.db.test.esent", RunInUnreliableYetFastModeThatIsNotSuitableForProduction = true});
-			db.SpinBackgroundWorkers();
+			store = NewDocumentStore();
+			db = store.DocumentDatabase;
 
 			db.PutIndex("pagesByTitle2",
 			            new IndexDefinition
 			            {
 							Map = @"
-                    from doc in docs
-                    where doc.type == ""page""
-                    select new {  f = 2 / doc.size };
-                "
+					from doc in docs
+					where doc.type == ""page""
+					select new {  f = 2 / doc.size };
+				"
 			            });
 		}
 
-		#region IDisposable Members
-
 		public override void Dispose()
 		{
-			db.Dispose();
+			store.Dispose();
 			base.Dispose();
 		}
-
-		#endregion
 
 		[Fact]
 		public void Can_get_stats_for_indexing_without_any_indexing()
@@ -53,17 +56,17 @@ namespace Raven.Tests.Indexes
 		public void Can_get_stats_for_indexing()
 		{
 			db.Put("1", Guid.Empty,
-			       JObject.Parse(
+			       RavenJObject.Parse(
 			       	@"{
-                type: 'page', 
-                some: 'val', 
-                other: 'var', 
-                content: 'this is the content', 
-                title: 'hello world', 
-                size: 1,
-                '@metadata': {'@id': 1}
-            }"),
-                   new JObject(), null);
+				type: 'page', 
+				some: 'val', 
+				other: 'var', 
+				content: 'this is the content', 
+				title: 'hello world', 
+				size: 1,
+				'@metadata': {'@id': 1}
+			}"),
+				   new RavenJObject(), null);
 
 			QueryResult docs;
 			do
@@ -88,29 +91,29 @@ namespace Raven.Tests.Indexes
 		public void Can_get_stats_for_indexing_including_errors()
 		{
 			db.Put("1", Guid.Empty,
-			       JObject.Parse(
+			       RavenJObject.Parse(
 			       	@"{
-                type: 'page', 
-                some: 'val', 
-                other: 'var', 
-                content: 'this is the content', 
-                title: 'hello world', 
-                size: 0,
-                '@metadata': {'@id': 1}
-            }"),
-                   new JObject(), null);
+				type: 'page', 
+				some: 'val', 
+				other: 'var', 
+				content: 'this is the content', 
+				title: 'hello world', 
+				size: 0,
+				'@metadata': {'@id': 1}
+			}"),
+				   new RavenJObject(), null);
 			db.Put("2", Guid.Empty,
-			       JObject.Parse(
+			       RavenJObject.Parse(
 			       	@"{
-                type: 'page', 
-                some: 'val', 
-                other: 'var', 
-                content: 'this is the content', 
-                title: 'hello world', 
-                size: 1,
-                '@metadata': {'@id': 1}
-            }"),
-                   new JObject(), null);
+				type: 'page', 
+				some: 'val', 
+				other: 'var', 
+				content: 'this is the content', 
+				title: 'hello world', 
+				size: 1,
+				'@metadata': {'@id': 1}
+			}"),
+				   new RavenJObject(), null);
 
 			QueryResult docs;
 			do
@@ -136,17 +139,17 @@ namespace Raven.Tests.Indexes
 		public void Can_get_details_about_indexing_errors()
 		{
 			db.Put("1", Guid.Empty,
-			       JObject.Parse(
+			       RavenJObject.Parse(
 			       	@"{
-                type: 'page', 
-                some: 'val', 
-                other: 'var', 
-                content: 'this is the content', 
-                title: 'hello world', 
-                size: 0,
-                '@metadata': {'@id': 1}
-            }"),
-                   new JObject(), null);
+				type: 'page', 
+				some: 'val', 
+				other: 'var', 
+				content: 'this is the content', 
+				title: 'hello world', 
+				size: 0,
+				'@metadata': {'@id': 1}
+			}"),
+				   new RavenJObject(), null);
 
 			QueryResult docs;
 			do

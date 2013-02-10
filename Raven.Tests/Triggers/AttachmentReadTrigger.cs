@@ -1,83 +1,87 @@
+//-----------------------------------------------------------------------
+// <copyright file="AttachmentReadTrigger.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System.ComponentModel.Composition.Hosting;
-using Newtonsoft.Json.Linq;
+using System.IO;
+using Raven.Abstractions.Data;
+using Raven.Client.Embedded;
 using Raven.Database;
 using Raven.Database.Config;
-using Raven.Database.Indexing;
 using Raven.Database.Plugins;
+using Raven.Json.Linq;
 using Raven.Tests.Storage;
 using System.Linq;
 using Xunit;
 
 namespace Raven.Tests.Triggers
 {
-    public class AttachmentReadTrigger : AbstractDocumentStorageTest
-    {
-        private readonly DocumentDatabase db;
+	public class AttachmentReadTrigger : RavenTest
+	{
+		private readonly EmbeddableDocumentStore store;
+		private readonly DocumentDatabase db;
 
-        public AttachmentReadTrigger()
-        {
-            db = new DocumentDatabase(new RavenConfiguration
-            {
-                DataDirectory = "raven.db.test.esent",
-                Container = new CompositionContainer(new TypeCatalog(
-                    typeof(HideAttachmentByCaseReadTrigger)))
-            });
+		public AttachmentReadTrigger()
+		{
+			store = NewDocumentStore(catalog:(new TypeCatalog(typeof (HideAttachmentByCaseReadTrigger))));
+			db = store.DocumentDatabase;
+		}
 
-        }
+		public override void Dispose()
+		{
+			store.Dispose();
+			base.Dispose();
+		}
 
-        public override void Dispose()
-        {
-            db.Dispose();
-            base.Dispose();
-        }
+		[Fact]
+		public void CanFilterAttachment()
+		{
+			db.PutStatic("ayendE", null, new MemoryStream(new byte[] { 1, 2 }), new RavenJObject());
 
-        [Fact]
-        public void CanFilterAttachment()
-        {
-            db.PutStatic("ayendE", null, new byte[] { 1, 2 }, new JObject());
+			var attachment = db.GetStatic("ayendE");
 
-            var attachment = db.GetStatic("ayendE");
+			Assert.Equal("You don't get to read this attachment",
+						 attachment.Metadata.Value<RavenJObject>("Raven-Read-Veto").Value<string>("Reason"));
+		}
 
-            Assert.Equal("You don't get to read this attachment",
-                         attachment.Metadata.Value<JObject>("Raven-Read-Veto").Value<string>("Reason"));
-        }
+		[Fact]
+		public void CanHideAttachment()
+		{
+			db.PutStatic("AYENDE", null, new MemoryStream(new byte[] { 1, 2 }), new RavenJObject());
 
-        [Fact]
-        public void CanHideAttachment()
-        {
-            db.PutStatic("AYENDE", null, new byte[] { 1, 2 }, new JObject());
+			var attachment = db.GetStatic("AYENDE");
 
-            var attachment = db.GetStatic("AYENDE");
+			Assert.Null(attachment);
+		}
 
-            Assert.Null(attachment);
-        }
-
-        [Fact]
-        public void CanModifyAttachment()
-        {
-            db.PutStatic("ayende", null, new byte[] { 1, 2 }, new JObject());
+		[Fact]
+		public void CanModifyAttachment()
+		{
+			db.PutStatic("ayende", null, new MemoryStream(new byte[] { 1, 2 }), new RavenJObject());
 
 
-            var attachment = db.GetStatic("ayende");
+			var attachment = db.GetStatic("ayende");
 
-            Assert.Equal(attachment.Data.Length, 4);
-        }
+			Assert.Equal(attachment.Data().Length, 4);
+		}
 
-        public class HideAttachmentByCaseReadTrigger : AbstractAttachmentReadTrigger
-        {
-            public override ReadVetoResult AllowRead(string key, byte[] data, Newtonsoft.Json.Linq.JObject metadata, ReadOperation operation)
-            {
-                if (key.All(char.IsUpper))
-                    return ReadVetoResult.Ignore;
-                if (key.Any(char.IsUpper))
-                    return ReadVetoResult.Deny("You don't get to read this attachment");
-                return ReadVetoResult.Allowed;
-            }
+		public class HideAttachmentByCaseReadTrigger : AbstractAttachmentReadTrigger
+		{
+			public override ReadVetoResult AllowRead(string key, Stream data, RavenJObject metadata, ReadOperation operation)
+			{
+				if (key.All(char.IsUpper))
+					return ReadVetoResult.Ignore;
+				if (key.Any(char.IsUpper))
+					return ReadVetoResult.Deny("You don't get to read this attachment");
+				return ReadVetoResult.Allowed;
+			}
 
-            public override byte[] OnRead(string key, byte[] data, JObject metadata, ReadOperation operation)
-            {
-                return new byte[] { 1, 2, 3, 4 };
-            }
-        }
-    }
+			public override void OnRead(string key, Attachment attachment)
+			{
+				attachment.Data = () => new MemoryStream(new byte[] { 1, 2, 3, 4 });
+				attachment.Size = 4;
+			}
+		}
+	}
 }

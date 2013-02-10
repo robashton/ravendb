@@ -1,8 +1,12 @@
+//-----------------------------------------------------------------------
+// <copyright file="SpatialIndexTestHelper.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System.IO;
-using Newtonsoft.Json;
-using Raven.Database.Indexing;
-using Raven.Database.Json;
-using Raven.Http.Json;
+using Raven.Imports.Newtonsoft.Json;
+using Raven.Abstractions.Extensions;
+using Raven.Abstractions.Indexing;
 
 namespace Raven.Tests.Spatial
 {
@@ -11,7 +15,7 @@ namespace Raven.Tests.Spatial
 		public static Event[] GetEvents()
 		{
 			return new Event[]
-            {
+			{
 				new Event("McCormick &amp, Schmick's Seafood Restaurant", 38.9579000, -77.3572000),
 				new Event("Jimmy's Old Town Tavern", 38.9690000, -77.3862000),
 				new Event("Ned Devine's", 38.9510000, -77.4107000),
@@ -33,7 +37,7 @@ namespace Raven.Tests.Spatial
 				new Event("Midway Island", 25.7, -171.7),
 				new Event("North Pole Way", 55.0, 4.0),
 
-            };
+			};
 		}
 
 		public static IndexDefinition CreateIndexDefinition()
@@ -106,12 +110,7 @@ namespace Raven.Tests.Spatial
 			using (var stringReader = new StringReader(jsonIndexDefinition))
 			using (var jsonReader = new JsonTextReader(stringReader))
 			{
-				var serializer = new JsonSerializer
-				{
-					Converters = { new JsonEnumConverter() }
-				};
-				
-				return serializer.Deserialize<IndexDefinition>(jsonReader);
+				return JsonExtensions.CreateDefaultJsonSerializer().Deserialize<IndexDefinition>(jsonReader);
 			}
 		}
 	}

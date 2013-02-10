@@ -1,29 +1,33 @@
-using Newtonsoft.Json.Linq;
+//-----------------------------------------------------------------------
+// <copyright file="HierarchicalData.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+using Raven.Abstractions.Data;
+using Raven.Abstractions.Indexing;
+using Raven.Client.Embedded;
+using Raven.Json.Linq;
 using Raven.Database;
 using Raven.Database.Config;
-using Raven.Database.Data;
-using Raven.Database.Indexing;
 using Raven.Tests.Storage;
 using Xunit;
 
 namespace Raven.Tests.Bugs
 {
-	public class HierarchicalData : AbstractDocumentStorageTest
+	public class HierarchicalData : RavenTest
 	{
+		private readonly EmbeddableDocumentStore store;
 		private readonly DocumentDatabase db;
 
 		public HierarchicalData()
 		{
-			db =
-				new DocumentDatabase(new RavenConfiguration
-				{
-					DataDirectory = "raven.db.test.esent",
-				});
+			store = NewDocumentStore();
+			db = store.DocumentDatabase;
 		}
 
 		public override void Dispose()
 		{
-			db.Dispose();
+			store.Dispose();
 			base.Dispose();
 		}
 
@@ -34,20 +38,18 @@ namespace Raven.Tests.Bugs
 			{
 				Map = @"
 from post in docs.Posts
-from comment in Hierarchy(post, ""Comments"") 
+from comment in Recurse(post, ((Func<dynamic,dynamic>)(x=>x.Comments)))
 select new { comment.Text }"
 			});
 
-			db.Put("abc", null, JObject.Parse(@"
+			db.Put("abc", null, RavenJObject.Parse(@"
 {
 	'Name': 'Hello Raven',
 	'Comments': [
 		{ 'Author': 'Ayende', 'Text': 'def',	'Comments': [ { 'Author': 'Rahien', 'Text': 'abc' } ] }
 	]
 }
-"), JObject.Parse("{'Raven-Entity-Name': 'Posts'}"), null);
-
-			db.SpinBackgroundWorkers();
+"), RavenJObject.Parse("{'Raven-Entity-Name': 'Posts'}"), null);
 
 			QueryResult queryResult;
 			do

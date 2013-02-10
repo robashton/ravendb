@@ -1,46 +1,56 @@
+//-----------------------------------------------------------------------
+// <copyright file="QueryParsingUtils.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.CodeDom.Compiler;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using ICSharpCode.NRefactory;
-using ICSharpCode.NRefactory.Ast;
-using ICSharpCode.NRefactory.PrettyPrinter;
+using ICSharpCode.NRefactory.CSharp;
+using ICSharpCode.NRefactory.PatternMatching;
+using Lucene.Net.Documents;
 using Microsoft.CSharp;
-using Microsoft.CSharp.RuntimeBinder;
+using Raven.Abstractions;
+using Raven.Abstractions.MEF;
+using Raven.Database.Linq.Ast;
 using Raven.Database.Linq.PrivateExtensions;
 using Raven.Database.Plugins;
+using Binder = Microsoft.CSharp.RuntimeBinder.Binder;
 
 namespace Raven.Database.Linq
 {
 	public static class QueryParsingUtils
 	{
-		public static string ToCSharp(this Expression expression)
+		[CLSCompliant(false)]
+		public static string GenerateText(TypeDeclaration type, OrderedPartCollection<AbstractDynamicCompilationExtension> extensions)
 		{
-			var output = new CSharpOutputVisitor();
-			expression.AcceptVisitor(output, null);
-			return (output.Text);
-		}
-
-		public static string GenerateText(TypeDeclaration type, AbstractDynamicCompilationExtension[] extensions)
-		{
-			var unit = new CompilationUnit();
+			var unit = new SyntaxTree();
 
 			var namespaces = new HashSet<string>
 			{
+				typeof (SystemTime).Namespace,
 				typeof (AbstractViewGenerator).Namespace,
 				typeof (Enumerable).Namespace,
 				typeof (IEnumerable<>).Namespace,
 				typeof (IEnumerable).Namespace,
 				typeof (int).Namespace,
-				typeof (LinqOnDynamic).Namespace
+				typeof (LinqOnDynamic).Namespace,
+				typeof(Field).Namespace,
+				typeof(CultureInfo).Namespace,
 			};
+
 			foreach (var extension in extensions)
 			{
-				foreach (var ns in extension.GetNamespacesToImport())
+				foreach (var ns in extension.Value.GetNamespacesToImport())
 				{
 					namespaces.Add(ns);
 				}
@@ -48,109 +58,238 @@ namespace Raven.Database.Linq
 
 			foreach (var ns in namespaces)
 			{
-				unit.AddChild(new Using(ns));
+				unit.Members.Add(new UsingDeclaration(ns));
 			}
 
-			unit.AddChild(type);
-			var output = new CSharpOutputVisitor();
-			unit.AcceptVisitor(output, null);
+			unit.Members.Add(new WindowsNewLine());
+			unit.Members.Add(new WindowsNewLine());
 
-			return output.Text;
+			unit.Members.Add(type);
+
+			var stringWriter = new StringWriter();
+			var output = new CSharpOutputVisitor(stringWriter, FormattingOptionsFactory.CreateSharpDevelop());
+			unit.AcceptVisitor(output);
+
+			return stringWriter.GetStringBuilder().ToString();
 		}
 
-		public static VariableDeclaration GetVariableDeclarationForLinqQuery(string query, bool requiresSelectNewAnonymousType)
+		[CLSCompliant(false)]
+		public static string ToText(AstNode node)
 		{
-			var parser = ParserFactory.CreateParser(SupportedLanguage.CSharp, new StringReader("var q = " + query));
+			var stringWriter = new StringWriter();
+			var output = new CSharpOutputVisitor(stringWriter, FormattingOptionsFactory.CreateSharpDevelop());
+			node.AcceptVisitor(output);
 
-			var block = parser.ParseBlock();
-
-			if (block.Children.Count != 1)
-				throw new InvalidOperationException("Could not understand query: \r\n" + parser.Errors.ErrorOutput);
-
-			var declaration = block.Children[0] as LocalVariableDeclaration;
-			if (declaration == null)
-				throw new InvalidOperationException("Only local variable decleration are allowed");
-
-			if (declaration.Variables.Count != 1)
-				throw new InvalidOperationException("Only one variable declaration is allowed");
-
-			var variable = declaration.Variables[0];
-
-			if (variable.Initializer == null)
-				throw new InvalidOperationException("Variable declaration must have an initializer");
-
-			var queryExpression = (variable.Initializer as QueryExpression);
-			if (queryExpression == null)
-				throw new InvalidOperationException("Variable initializer must be a query expression");
-
-			var selectClause = queryExpression.SelectOrGroupClause as QueryExpressionSelectClause;
-			if (selectClause == null)
-				throw new InvalidOperationException("Variable initializer must be a select query expression");
-
-			var createExpression = selectClause.Projection as ObjectCreateExpression;
-			if ((createExpression == null || createExpression.IsAnonymousType == false) && requiresSelectNewAnonymousType)
-				throw new InvalidOperationException(
-					"Variable initializer must be a select query expression returning an anonymous object");
-
-			return variable;
+			return stringWriter.GetStringBuilder().ToString();
 		}
 
-	    public static VariableDeclaration GetVariableDeclarationForLinqMethods(string query)
+		public static VariableInitializer GetVariableDeclarationForLinqQuery(string query, bool requiresSelectNewAnonymousType)
 		{
-			var parser = ParserFactory.CreateParser(SupportedLanguage.CSharp, new StringReader("var q = " + query));
+			try
+			{
+				var parser = new CSharpParser();
+				var block = parser.ParseStatements(ToQueryStatement(query)).ToList();
 
-			var block = parser.ParseBlock();
+				if (block.Count == 0 || parser.HasErrors)
+				{
+					var errs = string.Join(Environment.NewLine, parser.Errors.Select(x => x.Region + ": " + x.ErrorType + " - " + x.Message));
+					throw new InvalidOperationException("Could not understand query: \r\n" + errs);
+				}
 
-			if (block.Children.Count != 1)
-				throw new InvalidOperationException("Could not understand query: \r\n" + parser.Errors.ErrorOutput);
+				var declaration = block[0] as VariableDeclarationStatement;
+				if (declaration == null)
+					throw new InvalidOperationException("Only local variable declaration are allowed");
 
-			var declaration = block.Children[0] as LocalVariableDeclaration;
-			if (declaration == null)
-				throw new InvalidOperationException("Only local variable decleration are allowed");
+				if (declaration.Variables.Count != 1)
+					throw new InvalidOperationException("Only one variable declaration is allowed");
 
-			if (declaration.Variables.Count != 1)
-				throw new InvalidOperationException("Only one variable declaration is allowed");
+				var variable = declaration.Variables.First();
 
-			var variable = declaration.Variables[0];
+				if (variable.Initializer == null)
+					throw new InvalidOperationException("Variable declaration must have an initializer");
 
-			if (variable.Initializer as InvocationExpression == null)
-				throw new InvalidOperationException("Variable declaration must have an initializer which is a method invocation expression");
+				var queryExpression = (variable.Initializer as QueryExpression);
+				if (queryExpression == null)
+					throw new InvalidOperationException("Variable initializer must be a query expression");
 
-			var targetObject = ((InvocationExpression)variable.Initializer).TargetObject as MemberReferenceExpression;
-			if (targetObject == null)
-				throw new InvalidOperationException("Variable initializer must be invoked on a method reference expression");
+				var selectClause = queryExpression.Clauses.OfType<QuerySelectClause>().FirstOrDefault();
+				if (selectClause == null)
+					throw new InvalidOperationException("Variable initializer must be a select query expression");
 
-			if (targetObject.MemberName != "Select" && targetObject.MemberName != "SelectMany")
-				throw new InvalidOperationException("Variable initializer must end with a select call");
+				var createExpression = GetAnonymousCreateExpression(selectClause.Expression) as AnonymousTypeCreateExpression;
+				if ((createExpression == null) && requiresSelectNewAnonymousType)
+					throw new InvalidOperationException(
+						"Variable initializer must be a select query expression returning an anonymous object");
 
-			var lambdaExpression = ((InvocationExpression)variable.Initializer).Arguments.Last() as LambdaExpression;
-			if (lambdaExpression == null)
-				throw new InvalidOperationException("Variable initializer select must have a lambda expression");
-
-			var objectCreateExpression = lambdaExpression.ExpressionBody as ObjectCreateExpression;
-			if (objectCreateExpression == null)
-				throw new InvalidOperationException("Variable initializer select must have a lambda expression with an object create expression");
-
-			if (objectCreateExpression.IsAnonymousType == false)
-				throw new InvalidOperationException("Variable initializer select must have a lambda expression creating an anoynmous type");
-
-			return variable;
+				variable.AcceptVisitor(new TransformNullCoalescingOperatorTransformer(), null);
+				variable.AcceptVisitor(new DynamicExtensionMethodsTranslator(), null);
+				variable.AcceptVisitor(new TransformDynamicLambdaExpressions(), null);
+				variable.AcceptVisitor(new TransformObsoleteMethods(), null);
+				return variable;
+			}
+			catch (Exception e)
+			{
+				throw new InvalidOperationException("Could not understand query: " + Environment.NewLine + query, e);
+			}
 		}
 
-
-		public static Type Compile(string fileName, string name, string queryText, AbstractDynamicCompilationExtension[] extensions)
+		[CLSCompliant(false)]
+		public static VariableInitializer GetVariableDeclarationForLinqMethods(string query, bool requiresSelectNewAnonymousType)
 		{
+			try
+			{
+
+				var parser = new CSharpParser();
+
+				var block = parser.ParseStatements(ToQueryStatement(query)).ToList();
+
+				if (block.Count == 0 || parser.HasErrors)
+				{
+					var errs = string.Join(Environment.NewLine, parser.Errors.Select(x => x.Region + ": " + x.ErrorType + " - " + x.Message));
+					throw new InvalidOperationException("Could not understand query: \r\n" + errs);
+				}
+
+				var declaration = block[0] as VariableDeclarationStatement;
+				if (declaration == null)
+					throw new InvalidOperationException("Only local variable declaration are allowed");
+
+				if (declaration.Variables.Count != 1)
+					throw new InvalidOperationException("Only one variable declaration is allowed");
+
+				var variable = declaration.Variables.First();
+
+				if (variable.Initializer as InvocationExpression == null)
+					throw new InvalidOperationException("Variable declaration must have an initializer which is a method invocation expression");
+
+				var targetObject = ((InvocationExpression)variable.Initializer).Target as MemberReferenceExpression;
+				if (targetObject == null)
+					throw new InvalidOperationException("Variable initializer must be invoked on a method reference expression");
+
+				if (targetObject.MemberName != "Select" && targetObject.MemberName != "SelectMany")
+					throw new InvalidOperationException("Variable initializer must end with a select call");
+
+				var lambdaExpression = AsLambdaExpression(((InvocationExpression)variable.Initializer).Arguments.Last());
+				if (lambdaExpression == null)
+					throw new InvalidOperationException("Variable initializer select must have a lambda expression");
+
+				variable.AcceptVisitor(new TransformNullCoalescingOperatorTransformer(), null);
+				variable.AcceptVisitor(new DynamicExtensionMethodsTranslator(), null);
+				variable.AcceptVisitor(new TransformDynamicLambdaExpressions(), null);
+				variable.AcceptVisitor(new TransformObsoleteMethods(), null);
+
+				var expressionBody = GetAnonymousCreateExpression(lambdaExpression.Body);
+
+				var anonymousTypeCreateExpression = expressionBody as AnonymousTypeCreateExpression;
+				if (anonymousTypeCreateExpression == null && requiresSelectNewAnonymousType)
+					throw new InvalidOperationException("Variable initializer select must have a lambda expression with an object create expression");
+
+				var objectCreateExpression = expressionBody as ObjectCreateExpression;
+				if (objectCreateExpression != null && requiresSelectNewAnonymousType)
+					throw new InvalidOperationException("Variable initializer select must have a lambda expression creating an anonymous type but returning " + objectCreateExpression.Type);
+
+				return variable;
+			}
+			catch (Exception e)
+			{
+				throw new InvalidOperationException("Could not understand query: " + Environment.NewLine + query, e);
+			}
+		}
+
+		private static string ToQueryStatement(string query)
+		{
+			query = query.Replace("new() {", "new {").Replace("new () {", "new {"); ;
+			if (query.EndsWith(";"))
+				return "var qD1266A5B_A4BE_4108_BA29_79920DBC1308 = " + query;
+			return "var qD1266A5B_A4BE_4108_BA29_79920DBC1308 = " + query + ";";
+		}
+
+		public static INode GetAnonymousCreateExpression(INode expression)
+		{
+			var invocationExpression = expression as InvocationExpression;
+
+			if (invocationExpression == null)
+				return expression;
+			var memberReferenceExpression = invocationExpression.Target as MemberReferenceExpression;
+			if (memberReferenceExpression == null)
+				return expression;
+
+			var typeReference = memberReferenceExpression.Target as TypeReferenceExpression;
+			if (typeReference == null)
+			{
+				var objectCreateExpression = memberReferenceExpression.Target as AnonymousTypeCreateExpression;
+				if (objectCreateExpression != null && memberReferenceExpression.MemberName == "Boost")
+				{
+					return objectCreateExpression;
+				}
+				return expression;
+			}
+
+			var simpleType = typeReference.Type as SimpleType;
+			if (simpleType != null && simpleType.Identifier != "Raven.Database.Linq.PrivateExtensions.DynamicExtensionMethods")
+				return expression;
+
+			switch (memberReferenceExpression.MemberName)
+			{
+				case "Boost":
+					return invocationExpression.Arguments.First();
+			}
+			return expression;
+		}
+
+		[CLSCompliant(false)]
+		public static LambdaExpression AsLambdaExpression(this Expression expression)
+		{
+			var lambdaExpression = expression as LambdaExpression;
+			if (lambdaExpression != null)
+				return lambdaExpression;
+
+			var castExpression = expression as CastExpression;
+			if (castExpression != null)
+			{
+				return AsLambdaExpression(castExpression.Expression);
+			}
+
+			var parenthesizedExpression = expression as ParenthesizedExpression;
+			if (parenthesizedExpression != null)
+			{
+				return AsLambdaExpression(parenthesizedExpression.Expression);
+			}
+			return null;
+		}
+
+		private class CacheEntry
+		{
+			public int Usages;
+			public string Source;
+			public Type Type;
+		}
+
+		private static readonly ConcurrentDictionary<string, CacheEntry> cacheEntries = new ConcurrentDictionary<string, CacheEntry>();
+
+		public static Type Compile(string source, string name, string queryText, OrderedPartCollection<AbstractDynamicCompilationExtension> extensions, string basePath)
+		{
+			source = source.Replace("AbstractIndexCreationTask.SpatialGenerate", "SpatialGenerate"); // HACK, should probably be on the client side
+
+			CacheEntry entry;
+			if (cacheEntries.TryGetValue(source, out entry))
+			{
+				Interlocked.Increment(ref entry.Usages);
+				return entry.Type;
+			}
+
 			var provider = new CSharpCodeProvider(new Dictionary<string, string> { { "CompilerVersion", "v4.0" } });
 			var assemblies = new HashSet<string>
 			{
+				typeof (SystemTime).Assembly.Location,
 				typeof (AbstractViewGenerator).Assembly.Location,
 				typeof (NameValueCollection).Assembly.Location,
 				typeof (Enumerable).Assembly.Location,
 				typeof (Binder).Assembly.Location,
+				typeof (Field).Assembly.Location
 			};
 			foreach (var extension in extensions)
 			{
-				foreach (var assembly in extension.GetAssembliesToReference())
+				foreach (var assembly in extension.Value.GetAssembliesToReference())
 				{
 					assemblies.Add(assembly);
 				}
@@ -158,14 +297,17 @@ namespace Raven.Database.Linq
 			var compilerParameters = new CompilerParameters
 			{
 				GenerateExecutable = false,
-				GenerateInMemory = false,
-				IncludeDebugInformation = true,
+				GenerateInMemory = true,
+				IncludeDebugInformation = false
 			};
+			if (basePath != null)
+				compilerParameters.TempFiles = new TempFileCollection(basePath, false);
+
 			foreach (var assembly in assemblies)
 			{
 				compilerParameters.ReferencedAssemblies.Add(assembly);
 			}
-			var compileAssemblyFromFile = provider.CompileAssemblyFromFile(compilerParameters, fileName);
+			var compileAssemblyFromFile = provider.CompileAssemblyFromSource(compilerParameters, source);
 			var results = compileAssemblyFromFile;
 
 			if (results.Errors.HasErrors)
@@ -180,7 +322,31 @@ namespace Raven.Database.Linq
 				}
 				throw new InvalidOperationException(sb.ToString());
 			}
-			return results.CompiledAssembly.GetType(name);
+
+			CodeVerifier.AssertNoSecurityCriticalCalls(results.CompiledAssembly);
+
+			Type result = results.CompiledAssembly.GetType(name);
+			if (result == null)
+				throw new InvalidOperationException(
+					"Could not get compiled index type. This probably means that there is something wrong with the assembly load context.");
+			cacheEntries.TryAdd(source, new CacheEntry
+			{
+				Source = source,
+				Type = result,
+				Usages = 1
+			});
+
+			if (cacheEntries.Count > 256)
+			{
+				var kvp = cacheEntries.OrderBy(x => x.Value.Usages).FirstOrDefault();
+				if (kvp.Key != null)
+				{
+					CacheEntry _;
+					cacheEntries.TryRemove(kvp.Key, out _);
+				}
+			}
+
+			return result;
 		}
 	}
 }

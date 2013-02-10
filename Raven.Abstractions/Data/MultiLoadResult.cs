@@ -1,7 +1,12 @@
+//-----------------------------------------------------------------------
+// <copyright file="MultiLoadResult.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System.Collections.Generic;
-using Newtonsoft.Json.Linq;
+using Raven.Json.Linq;
 
-namespace Raven.Database.Data
+namespace Raven.Abstractions.Data
 {
 	/// <summary>
 	/// Represent a result which include both document results and included documents
@@ -11,19 +16,19 @@ namespace Raven.Database.Data
 		/// <summary>
 		/// Gets or sets the document results.
 		/// </summary>
-		public List<JObject> Results { get; set; }
+		public List<RavenJObject> Results { get; set; }
 		/// <summary>
 		/// Gets or sets the included documents
 		/// </summary>
-		public List<JObject> Includes { get; set; }
+		public List<RavenJObject> Includes { get; set; }
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="MultiLoadResult"/> class.
 		/// </summary>
 		public MultiLoadResult()
 		{
-			Results = new List<JObject>();
-			Includes = new List<JObject>();
+			Results = new List<RavenJObject>();
+			Includes = new List<RavenJObject>();
 		}
 	}
 }

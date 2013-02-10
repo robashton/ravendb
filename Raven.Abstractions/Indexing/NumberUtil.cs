@@ -1,7 +1,12 @@
+//-----------------------------------------------------------------------
+// <copyright file="NumberUtil.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.Globalization;
 
-namespace Raven.Database.Indexing
+namespace Raven.Abstractions.Indexing
 {
 	/// <summary>
 	/// Helper function for numeric to indexed string and vice versa
@@ -13,7 +18,7 @@ namespace Raven.Database.Indexing
 		/// </summary>
 		public static string NumberToString(int number)
 		{
-			return string.Format("0x{0:X8}", number);
+			return "Ix" + number.ToString("G", CultureInfo.InvariantCulture);
 		}
 
 		/// <summary>
@@ -21,7 +26,7 @@ namespace Raven.Database.Indexing
 		/// </summary>
 		public static string NumberToString(long number)
 		{
-			return string.Format("0x{0:X16}", number);
+			return "Lx" + number.ToString("G", CultureInfo.InvariantCulture);
 		}
 
 		/// <summary>
@@ -45,6 +50,9 @@ namespace Raven.Database.Indexing
 		/// </summary>
 		public static object StringToNumber(string number)
 		{
+			if (number == null)
+				return null;
+
 			if ("NULL".Equals(number, StringComparison.InvariantCultureIgnoreCase) || 
 				"*".Equals(number,StringComparison.InvariantCultureIgnoreCase))
 				return null;
@@ -63,13 +71,17 @@ namespace Raven.Database.Indexing
 							return long.Parse(num, NumberStyles.HexNumber);
 					}
 					break;
+				case "Ix":
+					return int.Parse(num, CultureInfo.InvariantCulture);
+				case "Lx":
+					return long.Parse(num, CultureInfo.InvariantCulture);
 				case "Fx":
 					return  float.Parse(num, CultureInfo.InvariantCulture);
 				case "Dx":
 					return  double.Parse(num, CultureInfo.InvariantCulture);
 			}
 
-			throw new ArgumentException("Could not understand how to parse: " + number);
+			throw new ArgumentException(string.Format("Could not understand how to parse: '{0}'", number));
 
 		}
 	}

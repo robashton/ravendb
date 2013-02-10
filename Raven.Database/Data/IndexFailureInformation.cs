@@ -1,3 +1,8 @@
+//-----------------------------------------------------------------------
+// <copyright file="IndexFailureInformation.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 namespace Raven.Database.Data
 {
 	/// <summary>
@@ -17,10 +22,17 @@ namespace Raven.Database.Data
 			{
 				if (Attempts == 0 || Errors == 0)
 					return false;
+				if(ReduceAttempts != null)
+				{
+					// we don't have enough attempts to make a useful determination
+					if (Attempts + ReduceAttempts < 100)
+						return false;
+					return (Errors + (ReduceErrors ?? 0))/(float) (Attempts + (ReduceAttempts ?? 0)) > 0.15;
+				}
 				// we don't have enough attempts to make a useful determination
-				if (Attempts < 10)
+				if (Attempts < 100)
 					return false;
-				return (Errors/(float) Attempts) > 0.15;
+				return (Errors / (float)Attempts) > 0.15;
 			}
 		}
 
@@ -41,6 +53,19 @@ namespace Raven.Database.Data
 		/// Gets or sets the number of indexing successes.
 		/// </summary>
 		public int Successes { get; set; }
+
+		/// <summary>
+		/// Gets or sets the number of reduce attempts.
+		/// </summary>
+		public int? ReduceAttempts { get; set; }
+		/// <summary>
+		/// Gets or sets the number of reduce errors.
+		/// </summary>
+		public int? ReduceErrors { get; set; }
+		/// <summary>
+		/// Gets or sets the number of reduce successes.
+		/// </summary>
+		public int? ReduceSuccesses { get; set; }
 
 		/// <summary>
 		/// Gets the failure rate.

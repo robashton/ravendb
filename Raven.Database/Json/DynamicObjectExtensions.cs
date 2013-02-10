@@ -1,3 +1,8 @@
+//-----------------------------------------------------------------------
+// <copyright file="DynamicObjectExtensions.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using Lucene.Net.Documents;
 
@@ -20,7 +25,7 @@ namespace Raven.Database.Json
 			return DateTools.DateToString(self, DateTools.Resolution.MINUTE);
 		}
 
-		public static string Secoonds(this DateTime self)
+		public static string Seconds(this DateTime self)
 		{
 			return DateTools.DateToString(self, DateTools.Resolution.SECOND);
 		}

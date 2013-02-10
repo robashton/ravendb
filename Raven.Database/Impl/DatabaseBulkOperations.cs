@@ -1,10 +1,17 @@
+//-----------------------------------------------------------------------
+// <copyright file="DatabaseBulkOperations.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using Raven.Imports.Newtonsoft.Json;
+using Raven.Imports.Newtonsoft.Json.Linq;
+using Raven.Abstractions.Data;
+using Raven.Abstractions.Extensions;
+using Raven.Abstractions.Json;
 using Raven.Database.Data;
 using Raven.Database.Json;
-using Raven.Http;
-using Raven.Http.Json;
+using Raven.Json.Linq;
 
 namespace Raven.Database.Impl
 {
@@ -19,7 +26,7 @@ namespace Raven.Database.Impl
 			this.transactionInformation = transactionInformation;
 		}
 
-		public JArray DeleteByIndex(string indexName, IndexQuery queryToDelete, bool allowStale)
+		public RavenJArray DeleteByIndex(string indexName, IndexQuery queryToDelete, bool allowStale)
 		{
 			return PerformBulkOperation(indexName, queryToDelete, allowStale, (docId, tx) =>
 			{
@@ -28,7 +35,7 @@ namespace Raven.Database.Impl
 			});
 		}
 
-		public JArray UpdateByIndex(string indexName, IndexQuery queryToUpdate, PatchRequest[] patchRequests, bool allowStale)
+		public RavenJArray UpdateByIndex(string indexName, IndexQuery queryToUpdate, PatchRequest[] patchRequests, bool allowStale)
 		{
 			return PerformBulkOperation(indexName, queryToUpdate, allowStale, (docId, tx) =>
 			{
@@ -37,49 +44,59 @@ namespace Raven.Database.Impl
 			});
 		}
 
-		private JArray PerformBulkOperation(string index, IndexQuery indexQuery, bool allowStale, Func<string, TransactionInformation, object> batchOperation)
+		public RavenJArray UpdateByIndex(string indexName, IndexQuery queryToUpdate, ScriptedPatchRequest patch, bool allowStale)
 		{
-			var array = new JArray();
+			return PerformBulkOperation(indexName, queryToUpdate, allowStale, (docId, tx) =>
+			{
+				var patchResult = database.ApplyPatch(docId, null, patch, tx);
+				return new { Document = docId, Result = patchResult.Item1, Debug = patchResult.Item2 };
+			});
+		}
+
+		private RavenJArray PerformBulkOperation(string index, IndexQuery indexQuery, bool allowStale, Func<string, TransactionInformation, object> batchOperation)
+		{
+			var array = new RavenJArray();
 			var bulkIndexQuery = new IndexQuery
 			{
 				Query = indexQuery.Query,
 				Start = indexQuery.Start,
 				Cutoff = indexQuery.Cutoff,
 				PageSize = int.MaxValue,
-				FieldsToFetch = new[] { "__document_id" },
-				SortedFields = indexQuery.SortedFields
+				FieldsToFetch = new[] { Constants.DocumentIdFieldName },
+				SortedFields = indexQuery.SortedFields,
+				HighlighterPreTags = indexQuery.HighlighterPreTags,
+				HighlighterPostTags = indexQuery.HighlighterPostTags,
+				HighlightedFields = indexQuery.HighlightedFields
 			};
 
 			bool stale;
 			var queryResults = database.QueryDocumentIds(index, bulkIndexQuery, out stale);
 
-			if (stale)
+			if (stale && allowStale == false)
 			{
-				if (allowStale == false)
-				{
-					throw new InvalidOperationException(
+				throw new InvalidOperationException(
 						"Bulk operation cancelled because the index is stale and allowStale is false");
-				}
 			}
 
-			var enumerator = queryResults.GetEnumerator();
 			const int batchSize = 1024;
-			while (true)
+			using (var enumerator = queryResults.GetEnumerator())
 			{
-				var batchCount = 0;
-				database.TransactionalStorage.Batch(actions =>
+				while (true)
 				{
-					while (batchCount < batchSize  && enumerator.MoveNext())
+					var batchCount = 0;
+					database.TransactionalStorage.Batch(actions =>
 					{
-						batchCount++;
-						var result = batchOperation(enumerator.Current, transactionInformation);
-						array.Add(JObject.FromObject(result, new JsonSerializer { Converters = { new JsonEnumConverter() } }));
-					}
-				});
-				if (batchCount < batchSize) break;
+						while (batchCount < batchSize && enumerator.MoveNext())
+						{
+							batchCount++;
+							var result = batchOperation(enumerator.Current, transactionInformation);
+							array.Add(RavenJObject.FromObject(result));
+						}
+					});
+					if (batchCount < batchSize) break;
+				}
 			}
 			return array;
 		}
-
 	}
 }

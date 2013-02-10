@@ -1,11 +1,17 @@
+//-----------------------------------------------------------------------
+// <copyright file="AnalyzerPerField.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using Lucene.Net.Analysis;
+using Raven.Abstractions.Indexing;
 using Raven.Database.Indexing;
 using Xunit;
 using System.Linq;
 
 namespace Raven.Tests.Bugs
 {
-	public class AnalyzerPerField : LocalClientTest
+	public class AnalyzerPerField : RavenTest
 	{
 		[Fact]
 		public void CanUseAnalyzerPerField()
@@ -35,14 +41,14 @@ namespace Raven.Tests.Bugs
 
 				using (var s = store.OpenSession())
 				{
-                    var movies = s.Advanced.LuceneQuery<Movie>("Movies")
+					var movies = s.Advanced.LuceneQuery<Movie>("Movies")
 						.Where("Name:DOLLY")
 						.WaitForNonStaleResults()
 						.ToList();
 
 					Assert.Equal(1, movies.Count);
 
-                    movies = s.Advanced.LuceneQuery<Movie>("Movies")
+					movies = s.Advanced.LuceneQuery<Movie>("Movies")
 						.Where("Tagline:she's")
 						.WaitForNonStaleResults()
 						.ToList();

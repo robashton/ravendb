@@ -1,17 +1,23 @@
+//-----------------------------------------------------------------------
+// <copyright file="OperationHeaders.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.ComponentModel.Composition.Hosting;
 using System.IO;
 using System.Reflection;
-using Raven.Client.Client;
 using Raven.Client.Document;
+using Raven.Client.Embedded;
 using Raven.Database.Config;
 using Raven.Database.Extensions;
 using Raven.Database.Plugins;
-using Raven.Http;
+using Raven.Database.Server;
+using Raven.Json.Linq;
 using Raven.Server;
 using Raven.Tests.Document;
 using Xunit;
-using TransactionInformation = Raven.Http.TransactionInformation;
+using TransactionInformation = Raven.Abstractions.Data.TransactionInformation;
 
 namespace Raven.Tests.Bugs
 {
@@ -27,13 +33,13 @@ namespace Raven.Tests.Bugs
 
 		public void Dispose()
 		{
-            IOExtensions.DeleteDirectory(path);
+			IOExtensions.DeleteDirectory(path);
 		}
 
 		[Fact]
 		public void CanPassOperationHeadersUsingEmbedded()
 		{
-            using (var documentStore = new EmbeddableDocumentStore
+			using (var documentStore = new EmbeddableDocumentStore
 			{
 				Configuration = 
 				{
@@ -50,7 +56,7 @@ namespace Raven.Tests.Bugs
 				RecordOperationHeaders.Hello = null;
 				using(var session = documentStore.OpenSession())
 				{
-                    session.Advanced.DatabaseCommands.OperationsHeaders["Hello"] = "World";
+					((DocumentSession)session).DatabaseCommands.OperationsHeaders["Hello"] = "World";
 					session.Store(new { Bar = "foo"});
 					session.SaveChanges();
 
@@ -69,18 +75,19 @@ namespace Raven.Tests.Bugs
 					Catalogs = { new TypeCatalog(typeof(RecordOperationHeaders)) }
 				},
 				DataDirectory = path,
-				RunInUnreliableYetFastModeThatIsNotSuitableForProduction = true
+				RunInUnreliableYetFastModeThatIsNotSuitableForProduction = true,
+				Port = 8079
 			}))
 			using (var documentStore = new DocumentStore
 			{
-				Url = "http://localhost:8080"
+				Url = "http://localhost:8079"
 
 			}.Initialize())
 			{
 				RecordOperationHeaders.Hello = null;
 				using (var session = documentStore.OpenSession())
 				{
-                    session.Advanced.DatabaseCommands.OperationsHeaders["Hello"] = "World";
+					((DocumentSession)session).DatabaseCommands.OperationsHeaders["Hello"] = "World";
 					session.Store(new { Bar = "foo" });
 					session.SaveChanges();
 
@@ -99,11 +106,12 @@ namespace Raven.Tests.Bugs
 					Catalogs = { new TypeCatalog(typeof(RecordOperationHeaders)) }
 				},
 				DataDirectory = path,
-				RunInUnreliableYetFastModeThatIsNotSuitableForProduction = true
+				RunInUnreliableYetFastModeThatIsNotSuitableForProduction = true,
+				Port = 8079
 			}))
 			using (var documentStore = new DocumentStore
 			{
-				Url = "http://localhost:8080"
+				Url = "http://localhost:8079"
 
 			}.Initialize())
 			{
@@ -124,7 +132,7 @@ namespace Raven.Tests.Bugs
 		{
 			public static string Hello;
 
-			public override void OnPut(string key, Newtonsoft.Json.Linq.JObject document, Newtonsoft.Json.Linq.JObject metadata, TransactionInformation transactionInformation)
+			public override void OnPut(string key, RavenJObject document, RavenJObject metadata, TransactionInformation transactionInformation)
 			{
 				Hello = CurrentOperationContext.Headers.Value["Hello"];
 				base.OnPut(key, document, metadata, transactionInformation);

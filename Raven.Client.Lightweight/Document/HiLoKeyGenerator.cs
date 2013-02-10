@@ -1,39 +1,34 @@
+//-----------------------------------------------------------------------
+// <copyright file="HiLoKeyGenerator.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
+using System.Linq;
 using System.Threading;
 using System.Transactions;
-using Newtonsoft.Json.Linq;
-using Raven.Database.Json;
-using Raven.Http.Exceptions;
+using Raven.Abstractions.Data;
+using Raven.Abstractions.Exceptions;
+using Raven.Client.Connection;
+using Raven.Client.Exceptions;
+using Raven.Json.Linq;
 
 namespace Raven.Client.Document
 {
 	/// <summary>
 	/// Generate hilo numbers against a RavenDB document
 	/// </summary>
-    public class HiLoKeyGenerator
-    {
-        private const string RavenKeyGeneratorsHilo = "Raven/Hilo/";
-		private readonly IDocumentStore documentStore;
-        private readonly string tag;
-        private readonly long capacity;
-        private readonly object generatorLock = new object();
-        private long currentHi;
-        private long currentLo;
+	public class HiLoKeyGenerator : HiLoKeyGeneratorBase
+	{
+		private readonly object generatorLock = new object();
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="HiLoKeyGenerator"/> class.
 		/// </summary>
-		/// <param name="documentStore">The document store.</param>
-		/// <param name="tag">The tag.</param>
-		/// <param name="capacity">The capacity.</param>
-        public HiLoKeyGenerator(IDocumentStore documentStore, string tag, long capacity)
-        {
-            currentHi = 0;
-            this.documentStore = documentStore;
-            this.tag = tag;
-            this.capacity = capacity;
-            currentLo = capacity + 1;
-        }
+		public HiLoKeyGenerator(string tag, long capacity)
+			: base(tag, capacity)
+		{
+		}
 
 		/// <summary>
 		/// Generates the document key.
@@ -41,77 +36,114 @@ namespace Raven.Client.Document
 		/// <param name="convention">The convention.</param>
 		/// <param name="entity">The entity.</param>
 		/// <returns></returns>
-        public string GenerateDocumentKey(DocumentConvention convention,object entity)
-        {
-            return string.Format("{0}{1}{2}",
-                                 tag,
-								 convention.IdentityPartsSeparator,
-                                 NextId());
-        }
+		public string GenerateDocumentKey(IDatabaseCommands databaseCommands, DocumentConvention convention, object entity)
+		{
+			return GetDocumentKeyFromId(convention, NextId(databaseCommands));
+		}
 
-        private long NextId()
-        {
-            long incrementedCurrentLow = Interlocked.Increment(ref currentLo);
-            if (incrementedCurrentLow > capacity)
-            {
-                lock (generatorLock)
-                {
-                    if (Thread.VolatileRead(ref currentLo) > capacity)
-                    {
-                        currentHi = GetNextHi();
-                        currentLo = 1;
-                        incrementedCurrentLow = 1;
-                    }
-					else
-                    {
-                    	incrementedCurrentLow = Interlocked.Increment(ref currentLo);
-                    }
-                }
-            }
-            return (currentHi - 1)*capacity + (incrementedCurrentLow);
-        }
+		///<summary>
+		/// Create the next id (numeric)
+		///</summary>
+		public long NextId(IDatabaseCommands commands)
+		{
+			while (true)
+			{
+				var myRange = Range; // thread safe copy
 
-        private long GetNextHi()
-        {
-			using(new TransactionScope(TransactionScopeOption.Suppress))
-            while (true)
-            {
-                try
-                {
-                	var databaseCommands = documentStore.DatabaseCommands;
-                	var document = databaseCommands.Get(RavenKeyGeneratorsHilo + tag);
-                    if (document == null)
-                    {
-						databaseCommands.Put(RavenKeyGeneratorsHilo + tag,
-                                     Guid.Empty,
-                                     // sending empty guid means - ensure the that the document does NOT exists
-                                     JObject.FromObject(new HiLoKey{ServerHi = 2}),
-                                     new JObject());
-                        return 1;
-                    }
-                    var hiLoKey = document.DataAsJson.JsonDeserialization<HiLoKey>();
-                    var newHi = hiLoKey.ServerHi;
-                    hiLoKey.ServerHi += 1;
-					databaseCommands.Put(RavenKeyGeneratorsHilo + tag, document.Etag,
-                                 JObject.FromObject(hiLoKey),
-                                 document.Metadata);
-                    return newHi;
-                }
-                catch (ConcurrencyException)
-                {
-                   // expected, we need to retry
-                }
-            }
-        }
+				var current = Interlocked.Increment(ref myRange.Current);
+				if (current <= myRange.Max)
+					return current;
 
-        #region Nested type: HiLoKey
+				lock (generatorLock)
+				{
+					if (Range != myRange)
+						// Lock was contended, and the max has already been changed. Just get a new id as usual.
+						continue;
 
-        private class HiLoKey
-        {
-            public long ServerHi { get; set; }
+					Range = GetNextRange(commands);
+				}
+			}
+		}
 
-        }
+		private RangeValue GetNextRange(IDatabaseCommands databaseCommands)
+		{
+			using (new TransactionScope(TransactionScopeOption.Suppress))
+			{
+				ModifyCapacityIfRequired();
+				while (true)
+				{
+					try
+					{
+						var minNextMax = Range.Max;
+						JsonDocument document;
 
-        #endregion
-    }
+						try
+						{
+							document = GetDocument(databaseCommands);
+						}
+						catch (ConflictException e)
+						{
+							// resolving the conflict by selecting the highest number
+							var highestMax = e.ConflictedVersionIds
+								.Select(conflictedVersionId => GetMaxFromDocument(databaseCommands.Get(conflictedVersionId), minNextMax))
+								.Max();
+
+							PutDocument(databaseCommands, new JsonDocument
+							{
+								Etag = e.Etag,
+								Metadata = new RavenJObject(),
+								DataAsJson = RavenJObject.FromObject(new { Max = highestMax }),
+								Key = HiLoDocumentKey
+							});
+
+							continue;
+						}
+
+						long min, max;
+						if (document == null)
+						{
+							min = minNextMax + 1;
+							max = minNextMax + capacity;
+							document = new JsonDocument
+							{
+								Etag = Guid.Empty,
+								// sending empty guid means - ensure the that the document does NOT exists
+								Metadata = new RavenJObject(),
+								DataAsJson = RavenJObject.FromObject(new { Max = max }),
+								Key = HiLoDocumentKey
+							};
+						}
+						else
+						{
+							var oldMax = GetMaxFromDocument(document, minNextMax);
+							min = oldMax + 1;
+							max = oldMax + capacity;
+
+							document.DataAsJson["Max"] = max;
+						}
+						PutDocument(databaseCommands, document);
+
+						return new RangeValue(min, max);
+					}
+					catch (ConcurrencyException)
+					{
+						// expected, we need to retry
+					}
+				}
+			}
+		}
+
+		private void PutDocument(IDatabaseCommands databaseCommands,JsonDocument document)
+		{
+			databaseCommands.Put(HiLoDocumentKey, document.Etag,
+								 document.DataAsJson,
+								 document.Metadata);
+		}
+
+		private JsonDocument GetDocument(IDatabaseCommands databaseCommands)
+		{
+			var documents = databaseCommands.Get(new[] { HiLoDocumentKey, RavenKeyServerPrefix }, new string[0]);
+			return HandleGetDocumentResult(documents);
+		}
+	}
 }

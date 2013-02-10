@@ -1,11 +1,19 @@
+//-----------------------------------------------------------------------
+// <copyright file="Docs.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
-using Raven.Database.Data;
-using Raven.Http.Abstractions;
-using Raven.Http.Extensions;
+using System.Security.Cryptography;
+using Raven.Abstractions.Extensions;
+using Raven.Database.Extensions;
+using Raven.Database.Server.Abstractions;
+using Raven.Json.Linq;
+using System.Linq;
 
 namespace Raven.Database.Server.Responders
 {
-	public class Docs : RequestResponder
+	public class Docs : AbstractRequestResponder
 	{
 		public override string UrlPattern
 		{
@@ -22,14 +30,46 @@ namespace Raven.Database.Server.Responders
 			switch (context.Request.HttpMethod)
 			{
 				case "GET":
-					context.WriteJson(Database.GetDocuments(context.GetStart(), context.GetPageSize(Database.Configuration.MaxPageSize), context.GetEtagFromQueryString()));
+					long documentsCount = 0;
+					Guid lastDocEtag = Guid.Empty;
+					Database.TransactionalStorage.Batch(accessor =>
+					{
+						lastDocEtag = accessor.Staleness.GetMostRecentDocumentEtag();
+						documentsCount = accessor.Documents.GetDocumentsCount();
+					});
+
+					var array = lastDocEtag.ToByteArray().Concat(BitConverter.GetBytes(documentsCount)).ToArray();
+					using (var md5 = MD5.Create())
+					{
+						var hashed = md5.ComputeHash(array);
+						lastDocEtag = new Guid(hashed);
+					}
+
+					if (context.MatchEtag(lastDocEtag))
+					{
+						context.SetStatusToNotModified();
+					}
+					else
+					{
+						context.WriteHeaders(new RavenJObject(), lastDocEtag);
+
+						var startsWith = context.Request.QueryString["startsWith"];
+						if (string.IsNullOrEmpty(startsWith))
+							context.WriteJson(Database.GetDocuments(context.GetStart(), context.GetPageSize(Database.Configuration.MaxPageSize), context.GetEtagFromQueryString()));
+						else
+							context.WriteJson(Database.GetDocumentsWithIdStartingWith(
+								startsWith,
+								context.Request.QueryString["matches"],
+								context.GetStart(),
+								context.GetPageSize(Database.Configuration.MaxPageSize)));
+					}
 					break;
 				case "POST":
 					var json = context.ReadJson();
-					var id = Database.Put(null, Guid.NewGuid(), json,
-										  context.Request.Headers.FilterHeaders(isServerDocument: true),
-                                          GetRequestTransaction(context));
-					context.SetStatusToCreated("/docs/" + id);
+					var id = Database.Put(null, Guid.Empty, json,
+					                      context.Request.Headers.FilterHeaders(),
+					                      GetRequestTransaction(context));
+					context.SetStatusToCreated("/docs/" + Uri.EscapeUriString(id.Key));
 					context.WriteJson(id);
 					break;
 			}

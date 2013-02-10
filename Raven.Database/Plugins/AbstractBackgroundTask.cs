@@ -1,20 +1,17 @@
+//-----------------------------------------------------------------------
+// <copyright file="AbstractBackgroundTask.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
-using System.ComponentModel.Composition;
-using System.Threading;
 using System.Threading.Tasks;
-using log4net;
+using Raven.Abstractions.Logging;
 
 namespace Raven.Database.Plugins
 {
-	[InheritedExport]
 	public abstract class AbstractBackgroundTask : IStartupTask
 	{
-		private readonly ILog log;
-
-		protected AbstractBackgroundTask()
-		{
-			log = LogManager.GetLogger(GetType());
-		}
+		private static readonly ILog log = LogManager.GetCurrentClassLogger();
 
 		public DocumentDatabase Database { get; set; }
 
@@ -29,9 +26,10 @@ namespace Raven.Database.Plugins
 	    {
 	    }
 
-        int workCounter;
-        public void BackgroundTask()
+		int workCounter;
+		public void BackgroundTask()
 		{
+			var name = GetType().Name;
 			var context = Database.WorkContext;
 			while (context.DoWork)
 			{
@@ -42,11 +40,15 @@ namespace Raven.Database.Plugins
 				}
 				catch (Exception e)
 				{
-					log.Error("Failed to execute background task", e);
+					log.ErrorException("Failed to execute background task", e);
 				}
 				if (foundWork == false)
 				{
-				    context.WaitForWork(TimeoutForNextWork(), ref workCounter);
+					context.WaitForWork(TimeoutForNextWork(), ref workCounter, name);
+				}
+				else
+				{
+					context.UpdateFoundWork();
 				}
 			}
 		}

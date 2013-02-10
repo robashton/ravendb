@@ -1,49 +1,19 @@
+//-----------------------------------------------------------------------
+// <copyright file="Game.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
-using System.IO;
 using System.Linq;
-using System.Reflection;
-using log4net.Appender;
-using log4net.Config;
-using log4net.Layout;
-using Raven.Client.Client;
-using Raven.Client.Document;
+using Raven.Abstractions.Indexing;
 using Raven.Client.Indexes;
-using Raven.Database.Extensions;
-using Raven.Database.Indexing;
 using Xunit;
 
 namespace Raven.Tests.Document
 {
-	public class Game : RemoteClientTest, IDisposable
+	public class Game : RemoteClientTest
 	{
-		private string path;
-
-		#region IDisposable Members
-
-		public void Dispose()
-		{
-            IOExtensions.DeleteDirectory(path);
-		}
-
-		#endregion
-
-
-		private DocumentStore NewDocumentStore()
-		{
-			path = Path.GetDirectoryName(Assembly.GetAssembly(typeof(DocumentStoreServerTests)).CodeBase);
-			path = Path.Combine(path, "TestDb").Substring(6);
-            var documentStore = new EmbeddableDocumentStore
-			{
-				Configuration =
-				{
-					DataDirectory = path
-				}
-			};
-			documentStore.Initialize();
-			return documentStore;
-		}
-
-
+		
 		/// <summary>
 		/// http://groups.google.com/group/ravendb/browse_thread/thread/e9f045e073d7a698
 		/// </summary>
@@ -52,48 +22,44 @@ namespace Raven.Tests.Document
 		{
 			using (var store = NewDocumentStore())
 			{
-				BasicConfigurator.Configure(new OutputDebugStringAppender
-				{
-					Layout = new SimpleLayout()
-				});
 				store.DatabaseCommands.PutIndex("GameEventCountZoneBySpecificCharacter",
 									new IndexDefinition
 									{
 										Map =
 											@"from doc in docs where doc.DataUploadId != null 
-                && doc.RealmName != null 
-                && doc.Region != null 
-                && doc.CharacterName != null 
-                && doc.Zone != null 
-                && doc.SubZone != null
-    select new
-    {
-        DataUploadId = doc.DataUploadId,
-        RealmName = doc.RealmName,
-        Region = doc.Region,
-        CharacterName = doc.CharacterName,
-        Zone = doc.Zone,
-        Count = 1
-    };",
+				&& doc.RealmName != null 
+				&& doc.Region != null 
+				&& doc.CharacterName != null 
+				&& doc.Zone != null 
+				&& doc.SubZone != null
+	select new
+	{
+		DataUploadId = doc.DataUploadId,
+		RealmName = doc.RealmName,
+		Region = doc.Region,
+		CharacterName = doc.CharacterName,
+		Zone = doc.Zone,
+		Count = 1
+	};",
 										Reduce =
 											@"from result in results
-        group result by new
-        {
-            DataUploadId = result.DataUploadId,
-            RealmName = result.RealmName,
-            Region = result.Region,
-            CharacterName = result.CharacterName,
-            Zone = result.Zone
-        } into g
-        select new
-        {
-            DataUploadId = g.Key.DataUploadId,
-            RealmName = g.Key.RealmName,
-            Region = g.Key.Region,
-            CharacterName = g.Key.CharacterName,
-            Zone = g.Key.Zone,
-            Count = g.Sum(x => (int)x.Count).ToString()      
-        };"
+		group result by new
+		{
+			DataUploadId = result.DataUploadId,
+			RealmName = result.RealmName,
+			Region = result.Region,
+			CharacterName = result.CharacterName,
+			Zone = result.Zone
+		} into g
+		select new
+		{
+			DataUploadId = g.Key.DataUploadId,
+			RealmName = g.Key.RealmName,
+			Region = g.Key.Region,
+			CharacterName = g.Key.CharacterName,
+			Zone = g.Key.Zone,
+			Count = g.Sum(x => (int)x.Count)
+		};"
 									});
 
 				using (var documentSession = store.OpenSession())
@@ -241,7 +207,7 @@ namespace Raven.Tests.Document
 					documentSession.SaveChanges();
 
 					var darykalSumResults =
-                        documentSession.Advanced.LuceneQuery<GameEvent>("GameEventCountZoneBySpecificCharacter")
+						documentSession.Advanced.LuceneQuery<GameEvent>("GameEventCountZoneBySpecificCharacter")
 							.Where("RealmName:Moonglade AND Region:SingleRegion AND DataUploadId:10 ")
 							.SelectFields<ZoneCountResult>("Zone", "Count")
 							.WaitForNonStaleResults(TimeSpan.FromDays(1))
@@ -258,12 +224,8 @@ namespace Raven.Tests.Document
 		{
 			using (var store = NewDocumentStore())
 			{
-				BasicConfigurator.Configure(new OutputDebugStringAppender
-				{
-					Layout = new SimpleLayout()
-				});
 			    store.DatabaseCommands.PutIndex("GameEventCountZoneBySpecificCharacter",
-			                                    new IndexDefinition<GameEvent, GameEventCount>
+			                                    new IndexDefinitionBuilder<GameEvent, GameEventCount>
 			                                    {
 			                                        Map = docs =>
 			                                            from doc in docs
@@ -305,152 +267,67 @@ namespace Raven.Tests.Document
 
 				using (var documentSession = store.OpenSession())
 				{
-					documentSession.Store(new GameEvent()
+					for (int i = 0; i < 5; i++)
 					{
-						Id = "1",
-						UserId = "UserId1",
-						Time = "232",
-						ActionName = "Something",
-						CharacterName = "Darykal",
-						DataUploadId = "10",
-						RealmName = "Moonglade",
-						Region = "SingleRegion",
-						SubZone = "SubzoneOne",
-						Zone = "ZoneOne"
-					});
+						documentSession.Store(new GameEvent()
+						{
+							Id = (i+1).ToString(),
+							UserId = "UserId1",
+							Time = "232",
+							ActionName = "Something",
+							CharacterName = "Darykal",
+							DataUploadId = "10",
+							RealmName = "Moonglade",
+							Region = "SingleRegion",
+							SubZone = "SubzoneOne",
+							Zone = "ZoneOne"
+						});
 
-					documentSession.Store(new GameEvent()
-					{
-						Id = "2",
-						UserId = "UserId1",
-						Time = "232",
-						ActionName = "Something",
-						CharacterName = "Darykal",
-						DataUploadId = "10",
-						RealmName = "Moonglade",
-						Region = "SingleRegion",
-						SubZone = "SubzoneOne",
-						Zone = "ZoneOne"
-					});
+					}
 
-					documentSession.Store(new GameEvent()
-					{
-						Id = "3",
-						UserId = "UserId1",
-						Time = "232",
-						ActionName = "Something",
-						CharacterName = "Darykal",
-						DataUploadId = "10",
-						RealmName = "Moonglade",
-						Region = "SingleRegion",
-						SubZone = "SubzoneOne",
-						Zone = "ZoneOne"
-					});
 
-					documentSession.Store(new GameEvent()
+					for (int i =6; i < 8; i++)
 					{
-						Id = "4",
-						UserId = "UserId1",
-						Time = "232",
-						ActionName = "Something",
-						CharacterName = "Darykal",
-						DataUploadId = "10",
-						RealmName = "Moonglade",
-						Region = "SingleRegion",
-						SubZone = "SubzoneOne",
-						Zone = "ZoneOne"
-					});
+						documentSession.Store(new GameEvent()
+						{
+							Id = (i+1).ToString(),
+							UserId = "UserId1",
+							Time = "232",
+							ActionName = "Something",
+							CharacterName = "Darykal",
+							DataUploadId = "10",
+							RealmName = "Moonglade",
+							Region = "SingleRegion",
+							SubZone = "SubzoneOne",
+							Zone = "ZoneTwo"
+						});
 
-					documentSession.Store(new GameEvent()
-					{
-						Id = "5",
-						UserId = "UserId1",
-						Time = "232",
-						ActionName = "Something",
-						CharacterName = "Darykal",
-						DataUploadId = "10",
-						RealmName = "Moonglade",
-						Region = "SingleRegion",
-						SubZone = "SubzoneOne",
-						Zone = "ZoneOne"
-					});
+						
+					}
 
-					documentSession.Store(new GameEvent()
+					for (int i = 9; i < 12; i++)
 					{
-						Id = "6",
-						UserId = "UserId1",
-						Time = "232",
-						ActionName = "Something",
-						CharacterName = "Darykal",
-						DataUploadId = "10",
-						RealmName = "Moonglade",
-						Region = "SingleRegion",
-						SubZone = "SubzoneOne",
-						Zone = "ZoneTwo"
-					});
+						documentSession.Store(new GameEvent()
+						{
+							Id = (i + 1).ToString(),
+							UserId = "UserId1",
+							Time = "232",
+							ActionName = "Something",
+							CharacterName = "Darykal",
+							DataUploadId = "10",
+							RealmName = "Moonglade",
+							Region = "SingleRegion",
+							SubZone = "SubzoneOne",
+							Zone = "ZoneThree"
+						});
 
-					documentSession.Store(new GameEvent()
-					{
-						Id = "7",
-						UserId = "UserId1",
-						Time = "232",
-						ActionName = "Something",
-						CharacterName = "Darykal",
-						DataUploadId = "10",
-						RealmName = "Moonglade",
-						Region = "SingleRegion",
-						SubZone = "SubzoneOne",
-						Zone = "ZoneTwo"
-					});
-
-					documentSession.Store(new GameEvent()
-					{
-						Id = "8",
-						UserId = "UserId1",
-						Time = "232",
-						ActionName = "Something",
-						CharacterName = "Darykal",
-						DataUploadId = "10",
-						RealmName = "Moonglade",
-						Region = "SingleRegion",
-						SubZone = "SubzoneOne",
-						Zone = "ZoneThree"
-					});
-
-					documentSession.Store(new GameEvent()
-					{
-						Id = "9",
-						UserId = "UserId1",
-						Time = "232",
-						ActionName = "Something",
-						CharacterName = "Darykal",
-						DataUploadId = "10",
-						RealmName = "Moonglade",
-						Region = "SingleRegion",
-						SubZone = "SubzoneOne",
-						Zone = "ZoneThree"
-					});
-
-					documentSession.Store(new GameEvent()
-					{
-						Id = "10",
-						UserId = "UserId1",
-						Time = "232",
-						ActionName = "Something",
-						CharacterName = "Darykal",
-						DataUploadId = "10",
-						RealmName = "Moonglade",
-						Region = "SingleRegion",
-						SubZone = "SubzoneOne",
-						Zone = "ZoneOne"
-					});
+					}
 
 					documentSession.SaveChanges();
 
 					var darykalSumResults =
-                        documentSession.Advanced.LuceneQuery<GameEvent>("GameEventCountZoneBySpecificCharacter")
+						documentSession.Advanced.LuceneQuery<dynamic>("GameEventCountZoneBySpecificCharacter")
 							.Where("CharacterName:Darykal AND RealmName:Moonglade AND Region:SingleRegion AND DataUploadId:10 ")
-							.SelectFields<ZoneCountResult>("Zone", "Count")
 							.WaitForNonStaleResults(TimeSpan.FromDays(1))
 							.ToArray();
 

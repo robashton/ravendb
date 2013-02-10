@@ -1,43 +1,42 @@
-using Newtonsoft.Json.Linq;
+//-----------------------------------------------------------------------
+// <copyright file="ComplexIndexOnNotAnalyzedField.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+using Raven.Abstractions.Data;
+using Raven.Abstractions.Indexing;
+using Raven.Client.Embedded;
+using Raven.Json.Linq;
 using Raven.Database;
 using Raven.Database.Config;
-using Raven.Database.Data;
-using Raven.Database.Indexing;
 using Raven.Tests.Storage;
 using Xunit;
 
 namespace Raven.Tests.Indexes
 {
-	public class ComplexIndexOnNotAnalyzedField: AbstractDocumentStorageTest
+	public class ComplexIndexOnNotAnalyzedField: RavenTest
 	{
+		private readonly EmbeddableDocumentStore store;
 		private readonly DocumentDatabase db;
 
 		public ComplexIndexOnNotAnalyzedField()
 		{
-			db = new DocumentDatabase(new RavenConfiguration
-			{
-				DataDirectory = "raven.db.test.esent",
-				RunInUnreliableYetFastModeThatIsNotSuitableForProduction = true
-			});
-			db.SpinBackgroundWorkers();
+			store = NewDocumentStore();
+			db = store.DocumentDatabase;
 		}
-
-		#region IDisposable Members
 
 		public override void Dispose()
 		{
-			db.Dispose();
+			store.Dispose();
 			base.Dispose();
 		}
-
-		#endregion
 
 		[Fact]
 		public void CanQueryOnKey()
 		{
 			db.Put("companies/", null,
-			       JObject.Parse("{'Name':'Hiberanting Rhinos', 'Partners': ['companies/49', 'companies/50']}"), 
-				   JObject.Parse("{'Raven-Entity-Name': 'Companies'}"),
+			       RavenJObject.Parse("{'Name':'Hibernating Rhinos', 'Partners': ['companies/49', 'companies/50']}"), 
+				   RavenJObject.Parse("{'Raven-Entity-Name': 'Companies'}"),
 			       null);
 
 
@@ -56,7 +55,7 @@ namespace Raven.Tests.Indexes
 				});
 			} while (queryResult.IsStale);
 
-			Assert.Equal("Hiberanting Rhinos", queryResult.Results[0].Value<string>("Name"));
+			Assert.Equal("Hibernating Rhinos", queryResult.Results[0].Value<string>("Name"));
 		}
 	}
 }

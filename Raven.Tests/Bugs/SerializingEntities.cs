@@ -1,9 +1,14 @@
+//-----------------------------------------------------------------------
+// <copyright file="SerializingEntities.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using Newtonsoft.Json;
-using Raven.Client.Client;
+using Raven.Imports.Newtonsoft.Json;
 using Raven.Client.Document;
+using Raven.Client.Embedded;
 using Raven.Database.Config;
 using Raven.Database.Extensions;
 using Raven.Server;
@@ -67,16 +72,17 @@ namespace Raven.Tests.Bugs
 		[Fact]
 		public void Daniil_CanSaveProperly()
 		{
-            IOExtensions.DeleteDirectory("Data");
+			IOExtensions.DeleteDirectory("Data");
 			try
 			{
 				using(new RavenDbServer(new RavenConfiguration
 				{
-					DataDirectory = "Data"
+					DataDirectory = "Data",
+					Port = 8079
 				}))
 				using (var documentStore = new DocumentStore
 				{
-					Url = "http://localhost:8080"
+					Url = "http://localhost:8079"
 				}.Initialize())
 				{
 					
@@ -94,13 +100,13 @@ namespace Raven.Tests.Bugs
 					{
 						Customer = "customers/ayende",
 						OrderLines =
-                                {
-                                    new OrderLine
-                                    {
-                                        ProductId = product.Id,
-                                        Quantity = 3
-                                    },
-                                }
+								{
+									new OrderLine
+									{
+										ProductId = product.Id,
+										Quantity = 3
+									},
+								}
 					});
 					session.SaveChanges();
 
@@ -108,17 +114,17 @@ namespace Raven.Tests.Bugs
 			}
 			finally
 			{
-                IOExtensions.DeleteDirectory("Data");
+				IOExtensions.DeleteDirectory("Data");
 			}
 		}
 
 		[Fact]
 		public void WillNotSerializeEvents()
 		{
-            IOExtensions.DeleteDirectory("Data");
-            try
+			IOExtensions.DeleteDirectory("Data");
+			try
 			{
-                using (var documentStore = new EmbeddableDocumentStore())
+				using (var documentStore = new EmbeddableDocumentStore())
 				{
 					documentStore.Configuration.DataDirectory = "Data";
 					documentStore.Conventions.CustomizeJsonSerializer = x => x.TypeNameHandling = TypeNameHandling.Auto;
@@ -137,7 +143,7 @@ namespace Raven.Tests.Bugs
 			}
 			finally
 			{
-                IOExtensions.DeleteDirectory("Data");
+				IOExtensions.DeleteDirectory("Data");
 			}
 		}
 	}

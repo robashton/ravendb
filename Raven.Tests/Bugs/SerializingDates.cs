@@ -1,9 +1,15 @@
+//-----------------------------------------------------------------------
+// <copyright file="SerializingDates.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
+using Raven.Abstractions;
 using Xunit;
 
 namespace Raven.Tests.Bugs
 {
-	public class SerializingDates : LocalClientTest
+	public class SerializingDates : RavenTest
 	{
 		[Fact]
 		public void CanSaveAndReadDates()
@@ -33,7 +39,7 @@ namespace Raven.Tests.Bugs
 			public DateTime CreationDate { get; set; }
 			public DocItem()
 			{
-				CreationDate = DateTime.Now;
+				CreationDate = SystemTime.UtcNow;
 			}
 		}
 	}

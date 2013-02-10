@@ -1,6 +1,12 @@
+//-----------------------------------------------------------------------
+// <copyright file="LinqTransformerCompilationTests.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using Raven.Abstractions.Indexing;
+using Raven.Json.Linq;
 using Raven.Database.Indexing;
 using Raven.Database.Json;
 using Raven.Database.Linq;
@@ -13,24 +19,33 @@ namespace Raven.Tests.Linq
 	{
 		private const string query =
 			@"
-    from doc in docs
-    where doc.Type == ""page""
-    select new { Key = doc.Title, Value = doc.Content, Size = doc.Size };
+	from doc in docs
+	where doc.Type == ""page""
+	select new { Key = doc.Title, Value = doc.Content, Size = doc.Size };
 ";
 
 		[Fact]
 		public void Will_compile_query_successfully()
 		{
-			var dynamicQueryCompiler = new DynamicViewCompiler("pagesByTitle", new IndexDefinition { Map = query }, new AbstractDynamicCompilationExtension[0]);
+			var dynamicQueryCompiler = new DynamicViewCompiler("pagesByTitle", new IndexDefinition { Map = query },  ".");
 			dynamicQueryCompiler.GenerateInstance();
 			var compiled = dynamicQueryCompiler.GeneratedType;
 			Assert.NotNull(compiled);
 		}
 
 		[Fact]
+		public void Will_keep_cast_in_query()
+		{
+			var dynamicQueryCompiler = new DynamicViewCompiler("caster", new IndexDefinition { Map = "from x in docs select new { Id = (int)x.Id }" },  ".");
+			dynamicQueryCompiler.GenerateInstance();
+
+			Assert.Contains("(int)x.Id", dynamicQueryCompiler.CompiledQueryText);
+		}
+
+		[Fact]
 		public void Can_create_new_instance_from_query()
 		{
-			var dynamicQueryCompiler = new DynamicViewCompiler("pagesByTitle", new IndexDefinition { Map = query }, new AbstractDynamicCompilationExtension[0]);
+			var dynamicQueryCompiler = new DynamicViewCompiler("pagesByTitle", new IndexDefinition { Map = query },  ".");
 			dynamicQueryCompiler.GenerateInstance();
 			var compiled = dynamicQueryCompiler.GeneratedType;
 			Activator.CreateInstance(compiled);
@@ -39,36 +54,36 @@ namespace Raven.Tests.Linq
 		[Fact]
 		public void Can_execute_query()
 		{
-			var dynamicQueryCompiler = new DynamicViewCompiler("pagesByTitle", new IndexDefinition { Map = query }, new AbstractDynamicCompilationExtension[0]);
+			var dynamicQueryCompiler = new DynamicViewCompiler("pagesByTitle", new IndexDefinition { Map = query },  ".");
 			var generator = dynamicQueryCompiler.GenerateInstance();
-			var results = generator.MapDefinition(new[]
+			var results = generator.MapDefinitions[0](new[]
 			{
 				GetDocumentFromString(
 					@"
-                {
-                    '@metadata': {'@id': 1},
-                    'Type': 'page',
-                    'Title': 'doc1',
-                    'Content': 'Foobar',
-                    'Size': 31
-                }")
+				{
+					'@metadata': {'@id': 1},
+					'Type': 'page',
+					'Title': 'doc1',
+					'Content': 'Foobar',
+					'Size': 31
+				}")
 				,
 				GetDocumentFromString(
 					@"
-                {
-                    '@metadata': {'@id': 2},
-                    'Type': 'not a page',
-                }")
+				{
+					'@metadata': {'@id': 2},
+					'Type': 'not a page',
+				}")
 				,
 				GetDocumentFromString(
 					@"
-                {
-                    '@metadata': {'@id': 3},
-                    'Type': 'page',
-                    'Title': 'doc2',
-                    'Content': 'Foobar',
-                    'Size': 31
-                }")
+				{
+					'@metadata': {'@id': 3},
+					'Type': 'page',
+					'Title': 'doc2',
+					'Content': 'Foobar',
+					'Size': 31
+				}")
 				,
 			}).Cast<object>().ToArray();
 
@@ -92,17 +107,17 @@ namespace Raven.Tests.Linq
 				Map = @"docs.Users
 	.Select(user => new {Location = user.Location, Count = 1})
 	.Select(user => new {Location = user.Location})"
-			}, new AbstractDynamicCompilationExtension[0]).GenerateInstance();
+			},  ".").GenerateInstance();
 
 
-			var results = viewGenerator.MapDefinition(new[]
+			var results = viewGenerator.MapDefinitions[0](new[]
 			{
 				GetDocumentFromString(
 				@"
-                {
-                    '@metadata': {'Raven-Entity-Name': 'Users', '@id': 1},
-                    'Location': 'Tel Aviv'
-                }")
+				{
+					'@metadata': {'Raven-Entity-Name': 'Users', '@id': 1},
+					'Location': 'Tel Aviv'
+				}")
 			}).Cast<object>().ToArray();
 
 			var expected = new[]
@@ -117,7 +132,7 @@ namespace Raven.Tests.Linq
 		}
 
 		[Fact]
-		public void Can_compile_map_reudce_using_linq_methods()
+		public void Can_compile_map_reduce_using_linq_methods()
 		{
 			var viewGenerator = new DynamicViewCompiler("test", new IndexDefinition
 			{
@@ -126,29 +141,30 @@ namespace Raven.Tests.Linq
 				Reduce =
 					@"results
 	.GroupBy(agg => agg.Location)
-	.Select(g => new {Loction = g.Key, Count = g.Sum(x => x.Count}))"
-			}, new AbstractDynamicCompilationExtension[0]).GenerateInstance();
+	.Select(g => new {Location = g.Key, Count = g.Sum(x => x.Count)})"
+			},  ".").GenerateInstance();
 
 
-			var results = viewGenerator.ReduceDefinition(viewGenerator.MapDefinition(new[]
+			var source = viewGenerator.MapDefinitions[0](new[]
 			{
 				GetDocumentFromString(
-				@"
-                {
-                    '@metadata': {'Raven-Entity-Name': 'Users', '@id': 1},
-                    'Location': 'Tel Aviv'
-                }"),
-				  GetDocumentFromString(
-				@"
-                {
-                    '@metadata': {'Raven-Entity-Name': 'Users', '@id': 1},
-                    'Location': 'Tel Aviv'
-                }")
-			})).Cast<object>().ToArray();
+					@"
+				{
+					'@metadata': {'Raven-Entity-Name': 'Users', '@id': 1},
+					'Location': 'Tel Aviv'
+				}"),
+				GetDocumentFromString(
+					@"
+				{
+					'@metadata': {'Raven-Entity-Name': 'Users', '@id': 1},
+					'Location': 'Tel Aviv'
+				}")
+			}).ToArray();
+			var results = viewGenerator.ReduceDefinition(source).Cast<object>().ToArray();
 
 			var expected = new[]
 			{
-				"{ Loction = Tel Aviv, Count = 2 }",
+				"{ Location = Tel Aviv, Count = 2 }",
 			};
 
 			for (var i = 0; i < results.Length; i++)
@@ -160,7 +176,7 @@ namespace Raven.Tests.Linq
 
 		public static dynamic GetDocumentFromString(string json)
 		{
-			return JsonToExpando.Convert(JObject.Parse(json));
+			return JsonToExpando.Convert(RavenJObject.Parse(json));
 		}
 	}
 }

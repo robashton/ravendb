@@ -1,26 +1,49 @@
-using System;
-using System.IO;
-using log4net;
-using log4net.Appender;
-using log4net.Config;
-using log4net.Layout;
-using Raven.Database;
-using Raven.Database.Config;
-using Raven.Scenarios;
-using Raven.Storage.Esent;
-using Raven.Tests.Indexes;
-using Raven.Tests.Triggers;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using Raven.Abstractions.Data;
+using Raven.Client;
+using Raven.Client.Document;
+using Raven.Client.Shard;
+using Raven.Tests.Faceted;
+using System.Linq;
+using Raven.Tests.MailingList;
 
-namespace Raven.Tryouts
+internal class Program
 {
-	internal class Program
+	private static void Main(string[] args)
 	{
-		private static void Main()
+		using (var ds = new DocumentStore
 		{
-            DocumentDatabase.Restore(new RavenConfiguration
-            {
-                DefaultStorageTypeName = typeof(TransactionalStorage).AssemblyQualifiedName
-            }, @"C:\Users\Ayende\Downloads\Backup\Backup", @"C:\Users\Ayende\Downloads\Backup\DB");
+			Url = "http://localhost:8080",
+			DefaultDatabase = "sql"
+		}.Initialize())
+		{
+			int pages = 0;
+			while (true)
+			{
+				using (var session = ds.OpenSession(new OpenSessionOptions
+				{
+					ForceReadFromMaster = true
+				}))
+				{
+					session.Advanced.MaxNumberOfRequestsPerSession = 10000;
+					var results = session.Query<User>()
+					       .Take(1024)
+					       .Skip(pages*1024)
+					       .ToList();
+					if (results.Count == 0)
+						break;
+					pages++;
+				}
+			}
 		}
+	}
+
+	public class User
+	{
+		public string Name, Email;
+		public string[] Phones;
 	}
 }

@@ -1,11 +1,15 @@
+//-----------------------------------------------------------------------
+// <copyright file="Statics.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
-using Raven.Http;
-using Raven.Http.Abstractions;
-using Raven.Http.Extensions;
+using Raven.Database.Extensions;
+using Raven.Database.Server.Abstractions;
 
 namespace Raven.Database.Server.Responders
 {
-	public class Statics : RequestResponder
+	public class Statics : AbstractRequestResponder
 	{
 		public override string UrlPattern
 		{
@@ -19,21 +23,12 @@ namespace Raven.Database.Server.Responders
 
 		public override void Respond(IHttpContext context)
 		{
-			var array = Database.GetAttachments(context.GetStart(), 
-			                                   context.GetPageSize(Database.Configuration.MaxPageSize),
-			                                   context.GetEtagFromQueryString());
+			var array = Database.GetAttachments(context.GetStart(),
+											   context.GetPageSize(Database.Configuration.MaxPageSize),
+			                                   context.GetEtagFromQueryString(),
+											   context.Request.QueryString["startsWith"],
+											   long.MaxValue);
 			context.WriteJson(array);
 		}
 	}
-
-    public abstract class RequestResponder : AbstractRequestResponder
-    {
-        public DocumentDatabase Database
-        {
-            get
-            {
-                return (DocumentDatabase)ResourceStore;
-            }
-        }
-    }
 }

@@ -1,49 +1,91 @@
+//-----------------------------------------------------------------------
+// <copyright file="DocumentStoreServerTests_DifferentProcess.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
+using System.Diagnostics;
+using System.IO;
+using System.Net;
 using System.Threading;
 using System.Transactions;
 using Raven.Client.Document;
+using Raven.Server;
+using Raven.Tests.Bugs;
+using Raven.Tests.Util;
 using Xunit;
 
 namespace Raven.Tests.Document
 {
 	public class DocumentStoreServerTests_DifferentProcess
 	{
-		[Fact(Skip = "Requires running a separate server process, promotion doesn't work on the same process :-(")]
+		[Fact]
 		public void Can_promote_transactions()
 		{
-			var documentStore = new DocumentStore {Url = "http://localhost:8080"};
-			documentStore.Initialize();
-
-			var company = new Company {Name = "Company Name"};
-
-			using (var tx = new TransactionScope())
+			using (var driver = new RavenDBDriver("HelloShard", new DocumentConvention()))
 			{
-				var session = documentStore.OpenSession();
-				session.Store(company);
-				session.SaveChanges();
+				driver.Start();
 
-				Assert.Equal(Guid.Empty, Transaction.Current.TransactionInformation.DistributedIdentifier);
+				WaitForNetwork(driver.Url);
 
-				using (var session3 = documentStore.OpenSession())
+				using (var documentStore = new DocumentStore { Url = driver.Url  }.Initialize())
 				{
-					session3.Store(new Company {Name = "Another company"});
-					session3.SaveChanges(); // force a dtc promotion
+					var company = new Company {Name = "Company Name"};
+					var durableEnlistment = new ManyDocumentsViaDTC.DummyEnlistmentNotification();
+					using (var tx = new TransactionScope())
+					{
+						var session = documentStore.OpenSession();
+						session.Store(company);
+						session.SaveChanges();
 
-					Assert.NotEqual(Guid.Empty, Transaction.Current.TransactionInformation.DistributedIdentifier);
+						Assert.Equal(Guid.Empty, Transaction.Current.TransactionInformation.DistributedIdentifier);
+
+						Transaction.Current.EnlistDurable(ManyDocumentsViaDTC.DummyEnlistmentNotification.Id,
+						                                  durableEnlistment, EnlistmentOptions.None);
+
+						Assert.NotEqual(Guid.Empty, Transaction.Current.TransactionInformation.DistributedIdentifier);
+
+
+						tx.Complete();
+					}
+
+
+					for (int i = 0; i < 15; i++) // wait for commit
+					{
+						using (var session2 = documentStore.OpenSession())
+							if (session2.Load<Company>(company.Id) != null)
+								break;
+						Thread.Sleep(100);
+					}
+					using (var session2 = documentStore.OpenSession())
+						Assert.NotNull((session2.Load<Company>(company.Id)));
+
+					for (int i = 0; i < 15; i++) // we have to wait to be notified, too
+					{
+						if (durableEnlistment.WasCommitted == false)
+							Thread.Sleep(100);
+					}
+
+					Assert.True(durableEnlistment.WasCommitted);
 				}
-
-
-				tx.Complete();
 			}
-			for (int i = 0; i < 15; i++)// wait for commit
+		}
+
+		private static void WaitForNetwork(string url)
+		{
+			for (int i = 0; i < 15; i++)
 			{
-				using (var session2 = documentStore.OpenSession())
-					if (session2.Load<Company>(company.Id) != null)
-						break;
-				Thread.Sleep(100);
+				try
+				{
+					var request = WebRequest.Create(url);
+					request.GetResponse().Close();
+					break;
+				}
+				catch (Exception)
+				{
+					Thread.Sleep(100);
+				}
 			}
-			using (var session2 = documentStore.OpenSession())
-				Assert.NotNull((session2.Load<Company>(company.Id)));
 		}
 	}
 }

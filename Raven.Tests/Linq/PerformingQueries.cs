@@ -1,7 +1,14 @@
-using System;
+//-----------------------------------------------------------------------
+// <copyright file="PerformingQueries.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using Raven.Abstractions.Indexing;
+using Raven.Database.Config;
+using Raven.Json.Linq;
+using Raven.Abstractions.MEF;
 using Raven.Database.Indexing;
 using Raven.Database.Json;
 using Raven.Database.Linq;
@@ -14,9 +21,9 @@ namespace Raven.Tests.Linq
 	{
 		private const string query =
 			@"
-    from doc in docs
-    where doc.type == ""page""
-    select new { Key = doc.title, Value = doc.content, Size = doc.size };
+	from doc in docs
+	where doc.type == ""page""
+	select new { Key = doc.title, Value = doc.content, Size = doc.size };
 ";
 
 		[Fact]
@@ -29,9 +36,9 @@ namespace Raven.Tests.Linq
 {'type':'page', title: 'there', content: 'foobar 2', size: 3, '@metadata': {'@id': 2} },
 {'type':'revision', size: 4, _id: 3}
 ]");
-			var transformer = new DynamicViewCompiler("pagesByTitle", new IndexDefinition { Map = query }, new AbstractDynamicCompilationExtension[0]);
+			var transformer = new DynamicViewCompiler("pagesByTitle", new IndexDefinition { Map = query },  ".");
 			var compiledQuery = transformer.GenerateInstance();
-			var actual = compiledQuery.MapDefinition(documents)
+			var actual = compiledQuery.MapDefinitions[0](documents)
 				.Cast<object>().ToArray();
 			var expected = new[]
 			{
@@ -56,13 +63,13 @@ namespace Raven.Tests.Linq
 from doc in docs
 select new { GeoHash = SampleGeoLocation.GeoHash(doc.loc, doc.lang) }
 "
-			},
-			                                          new AbstractDynamicCompilationExtension[]
-			                                          {
-			                                          	new SampleDynamicCompilationExtension()
-			                                          });
+			                                                                              },
+													  new OrderedPartCollection<AbstractDynamicCompilationExtension>
+													  {
+													  	new SampleDynamicCompilationExtension()
+													  }, ".", new InMemoryRavenConfiguration());
 			var compiledQuery = transformer.GenerateInstance();
-			var actual = compiledQuery.MapDefinition(documents)
+			var actual = compiledQuery.MapDefinitions[0](documents)
 				.Cast<object>().ToArray();
 			var expected = new[]
 			{
@@ -78,7 +85,7 @@ select new { GeoHash = SampleGeoLocation.GeoHash(doc.loc, doc.lang) }
 
 		public static IEnumerable<dynamic> GetDocumentsFromString(string json)
 		{
-			return JArray.Parse(json).Cast<JObject>().Select(JsonToExpando.Convert);
+			return RavenJArray.Parse(json).Cast<RavenJObject>().Select(JsonToExpando.Convert);
 		}
 	}
 }

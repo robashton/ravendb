@@ -1,3 +1,8 @@
+//-----------------------------------------------------------------------
+// <copyright file="GatherAllCollector.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,9 +31,14 @@ namespace Raven.Database.Indexing
 			_docBase = docBase;
 		}
 
-		public override bool AcceptsDocsOutOfOrder()
+		public override bool AcceptsDocsOutOfOrder
 		{
-			return true;
+			get { return true; }
+		}
+
+		public HashSet<int> Documents
+		{
+			get { return documents; }
 		}
 
 		public TopDocs ToTopDocs()

@@ -1,6 +1,14 @@
+//-----------------------------------------------------------------------
+// <copyright file="IndexDefinition.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using Raven.Abstractions.Data;
 
-namespace Raven.Database.Indexing
+namespace Raven.Abstractions.Indexing
 {
 	/// <summary>
 	/// A definition of a RavenIndex
@@ -8,10 +16,48 @@ namespace Raven.Database.Indexing
 	public class IndexDefinition
 	{
 		/// <summary>
-		/// Gets or sets the map function
+		/// Initializes a new instance of the <see cref="IndexDefinition"/> class.
 		/// </summary>
-		/// <value>The map.</value>
-		public string Map { get; set; }
+		public IndexDefinition()
+		{
+			Maps = new HashSet<string>();
+			Indexes = new Dictionary<string, FieldIndexing>();
+			Stores = new Dictionary<string, FieldStorage>();
+			Analyzers = new Dictionary<string, string>();
+			SortOptions = new Dictionary<string, SortOptions>();
+			Fields = new List<string>();
+			Suggestions = new Dictionary<string, SuggestionOptions>();
+			TermVectors = new Dictionary<string, FieldTermVector>();
+		}
+
+		/// <summary>
+		/// Get or set the name of the index
+		/// </summary>
+		public string Name { get; set; }
+
+		/// <summary>
+		/// Gets or sets the map function, if there is only one
+		/// </summary>
+		/// <remarks>
+		/// This property only exists for backward compatibility purposes
+		/// </remarks>
+		public string Map
+		{
+			get { return Maps.FirstOrDefault(); }
+			set
+			{
+				if (Maps.Count != 0)
+				{
+					Maps.Remove(Maps.First());
+				}
+				Maps.Add(value);
+			}
+		}
+
+		/// <summary>
+		/// All the map functions for this index
+		/// </summary>
+		public HashSet<string> Maps { get; set; }
 
 		/// <summary>
 		/// Gets or sets the reduce function
@@ -19,10 +65,10 @@ namespace Raven.Database.Indexing
 		/// <value>The reduce.</value>
 		public string Reduce { get; set; }
 
-        /// <summary>
-        /// Gets or sets the translator function
-        /// </summary>
-        public string TransformResults { get; set; }
+		/// <summary>
+		/// Gets or sets the translator function
+		/// </summary>
+		public string TransformResults { get; set; }
 
 		/// <summary>
 		/// Gets a value indicating whether this instance is map reduce index definition
@@ -32,10 +78,18 @@ namespace Raven.Database.Indexing
 		/// </value>
 		public bool IsMapReduce
 		{
-			get { return Reduce != null; }
+			get { return string.IsNullOrEmpty(Reduce) == false; }
 		}
 
-	    public bool IsCompiled { get; set; }
+		public bool IsCompiled { get; set; }
+
+		/// <summary>
+		/// Returns a boolean value indicating whether this IndexDefinition is of a temporary index
+		/// </summary>
+		public bool IsTemp
+		{
+			get { return !string.IsNullOrEmpty(Name) && Name.StartsWith("Temp/", StringComparison.InvariantCultureIgnoreCase); }
+		}
 
 		/// <summary>
 		/// Gets or sets the stores options
@@ -62,15 +116,21 @@ namespace Raven.Database.Indexing
 		public IDictionary<string, string> Analyzers { get; set; }
 
 		/// <summary>
-		/// Initializes a new instance of the <see cref="IndexDefinition"/> class.
+		/// The fields that are queryable in the index
 		/// </summary>
-		public IndexDefinition()
-		{
-			Indexes = new Dictionary<string, FieldIndexing>();
-			Stores = new Dictionary<string, FieldStorage>();
-			Analyzers = new Dictionary<string, string>();
-			SortOptions = new Dictionary<string, SortOptions>();
-		}
+		public IList<string> Fields { get; set; }
+
+		/// <summary>
+		/// Gets or sets the suggest options
+		/// </summary>
+		/// <value>The suggest options.</value>
+		public IDictionary<string, SuggestionOptions> Suggestions { get; set; }
+
+		/// <summary>
+		/// Gets or sets the term vectors options
+		/// </summary>
+		/// <value>The term vectors.</value>
+		public IDictionary<string, FieldTermVector> TermVectors { get; set; }
 
 		/// <summary>
 		/// Equals the specified other.
@@ -79,25 +139,46 @@ namespace Raven.Database.Indexing
 		/// <returns></returns>
 		public bool Equals(IndexDefinition other)
 		{
-			if (ReferenceEquals(null, other)) return false;
-			if (ReferenceEquals(this, other)) return true;
-			return Equals(other.Map, Map) && Equals(other.Reduce, Reduce) && Equals(other.TransformResults, TransformResults) && DictionaryEquals(other.Stores, Stores) &&
-				DictionaryEquals(other.Indexes, Indexes);
+			if (ReferenceEquals(null, other))
+				return false;
+			if (ReferenceEquals(this, other))
+				return true;
+			return Maps.SequenceEqual(other.Maps) &&
+					Equals(other.Name, Name) &&
+					Equals(other.Reduce, Reduce) &&
+					Equals(other.TransformResults, TransformResults) &&
+					DictionaryEquals(other.Stores, Stores) &&
+					DictionaryEquals(other.Indexes, Indexes) &&
+					DictionaryEquals(other.Analyzers, Analyzers) &&
+					DictionaryEquals(other.SortOptions, SortOptions) &&
+					DictionaryEquals(other.Suggestions, Suggestions) &&
+					DictionaryEquals(other.TermVectors, TermVectors);
 		}
 
-		private static bool DictionaryEquals<TKey,TValue>(IDictionary<TKey, TValue> x, IDictionary<TKey, TValue> y)
+		private static bool DictionaryEquals<TKey, TValue>(IDictionary<TKey, TValue> x, IDictionary<TKey, TValue> y)
 		{
-			if(x.Count!=y.Count)
+			if (x.Count != y.Count)
 				return false;
 			foreach (var v in x)
 			{
 				TValue value;
-				if(y.TryGetValue(v.Key, out value) == false)
+				if (y.TryGetValue(v.Key, out value) == false)
 					return false;
-				if(Equals(value,v.Value)==false)
+				if (Equals(value, v.Value) == false)
 					return false;
 			}
 			return true;
+		}
+
+		private static int DictionaryHashCode<TKey, TValue>(IEnumerable<KeyValuePair<TKey, TValue>> x)
+		{
+			int result = 0;
+			foreach (var kvp in x)
+			{
+				result = (result * 397) ^ kvp.Key.GetHashCode();
+				result = (result * 397) ^ (!Equals(kvp.Value, default(TValue)) ? kvp.Value.GetHashCode() : 0);
+			}
+			return result;
 		}
 
 		/// <summary>
@@ -109,9 +190,29 @@ namespace Raven.Database.Indexing
 		/// </returns>
 		public override bool Equals(object obj)
 		{
-			if (ReferenceEquals(null, obj)) return false;
-			if (ReferenceEquals(this, obj)) return true;
+			if (ReferenceEquals(null, obj))
+				return false;
+			if (ReferenceEquals(this, obj))
+				return true;
 			return Equals(obj as IndexDefinition);
+		}
+
+		private byte[] cachedHashCodeAsBytes;
+
+		/// <summary>
+		/// Provide a cached version of the index hash code, which is used when generating
+		/// the index etag. 
+		/// It isn't really useful for anything else, in particular, we cache that because
+		/// we want to avoid calculating the cost of doing this over and over again on each 
+		/// query.
+		/// </summary>
+		public byte[] GetIndexHash()
+		{
+			if (cachedHashCodeAsBytes != null)
+				return cachedHashCodeAsBytes;
+
+			cachedHashCodeAsBytes = BitConverter.GetBytes(GetHashCode());
+			return cachedHashCodeAsBytes;
 		}
 
 		/// <summary>
@@ -124,12 +225,96 @@ namespace Raven.Database.Indexing
 		{
 			unchecked
 			{
-				int result = (Map != null ? Map.GetHashCode() : 0);
-				result = (result*397) ^ (Reduce != null ? Reduce.GetHashCode() : 0);
-				result = (result*397) ^ (Stores != null ? Stores.GetHashCode() : 0);
-				result = (result*397) ^ (Indexes != null ? Indexes.GetHashCode() : 0);
+				int result = Maps.Where(x => x != null).Aggregate(0, (acc, val) => acc * 397 ^ val.GetHashCode());
+				result = (result * 397) ^ Maps.Count;
+				result = (result * 397) ^ (Reduce != null ? Reduce.GetHashCode() : 0);
+				result = (result * 397) ^ (TransformResults != null ? TransformResults.GetHashCode() : 0);
+				result = (result * 397) ^ DictionaryHashCode(Stores);
+				result = (result * 397) ^ DictionaryHashCode(Indexes);
+				result = (result * 397) ^ DictionaryHashCode(Analyzers);
+				result = (result * 397) ^ DictionaryHashCode(SortOptions);
+				result = (result * 397) ^ DictionaryHashCode(Suggestions);
+				result = (result * 397) ^ DictionaryHashCode(TermVectors);
 				return result;
 			}
+		}
+
+		public string Type
+		{
+			get
+			{
+				var name = Name ?? string.Empty;
+				if (name.StartsWith("Temp"))
+					return "Temp";
+				if (name.StartsWith("Auto"))
+					return "Auto";
+				if (IsCompiled)
+					return "Compiled";
+				if (IsMapReduce)
+					return "MapReduce";
+				return "Map";
+			}
+		}
+
+		/// <summary>
+		/// Remove the default values that we don't actually need
+		/// </summary>
+		public void RemoveDefaultValues()
+		{
+			var defaultStorage = IsMapReduce ? FieldStorage.Yes : FieldStorage.No;
+			foreach (var toRemove in Stores.Where(x => x.Value == defaultStorage).ToArray())
+			{
+				Stores.Remove(toRemove);
+			}
+			foreach (var toRemove in Indexes.Where(x => x.Value == FieldIndexing.Default).ToArray())
+			{
+				Indexes.Remove(toRemove);
+			}
+			foreach (var toRemove in SortOptions.Where(x => x.Value == Indexing.SortOptions.None).ToArray())
+			{
+				SortOptions.Remove(toRemove);
+			}
+			foreach (var toRemove in Analyzers.Where(x => string.IsNullOrEmpty(x.Value)).ToArray())
+			{
+				Analyzers.Remove(toRemove);
+			}
+			foreach (var toRemove in Suggestions.Where(x => x.Value.Distance == StringDistanceTypes.None).ToArray())
+			{
+				Suggestions.Remove(toRemove);
+			}
+			foreach (var toRemove in TermVectors.Where(x => x.Value == FieldTermVector.No).ToArray())
+			{
+				TermVectors.Remove(toRemove);
+			}
+		}
+
+		public IndexDefinition Clone()
+		{
+			var indexDefinition = new IndexDefinition
+			{
+				Name = Name,
+				Reduce = Reduce,
+				TransformResults = TransformResults,
+				cachedHashCodeAsBytes = cachedHashCodeAsBytes
+			};
+
+			if (Maps != null)
+				indexDefinition.Maps = new HashSet<string>(Maps);
+			if (Analyzers != null)
+				indexDefinition.Analyzers = new Dictionary<string, string>(Analyzers);
+			if (Fields != null)
+				indexDefinition.Fields = new List<string>(Fields);
+			if (Indexes != null)
+				indexDefinition.Indexes = new Dictionary<string, FieldIndexing>(Indexes);
+			if (SortOptions != null)
+				indexDefinition.SortOptions = new Dictionary<string, SortOptions>(SortOptions);
+			if (Stores != null)
+				indexDefinition.Stores = new Dictionary<string, FieldStorage>(Stores);
+			if (Suggestions != null)
+				indexDefinition.Suggestions = new Dictionary<string, SuggestionOptions>(Suggestions);
+			if (TermVectors != null)
+				indexDefinition.TermVectors = new Dictionary<string, FieldTermVector>(TermVectors);
+			return indexDefinition;
 		}
 	}
 }

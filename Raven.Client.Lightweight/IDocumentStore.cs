@@ -1,26 +1,74 @@
+//-----------------------------------------------------------------------
+// <copyright file="IDocumentStore.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
+#if !SILVERLIGHT
 using System.Collections.Specialized;
+#endif
+using System.Collections.Generic;
 using System.Net;
-using Raven.Client.Client;
+using Raven.Abstractions.Data;
+using Raven.Client.Changes;
+using Raven.Client.Connection;
+using Raven.Client.Connection.Profiling;
 using Raven.Client.Document;
+#if SILVERLIGHT
+using Raven.Client.Silverlight.Connection;
+#else
+using Raven.Client.Indexes;
+#endif
+using Raven.Client.Connection.Async;
+
 
 namespace Raven.Client
 {
 	/// <summary>
 	/// Interface for managing access to RavenDB and open sessions.
 	/// </summary>
-    public interface IDocumentStore : IDisposable
-    {
+	public interface IDocumentStore : IDisposalNotification
+	{
+		/// <summary>
+		/// Subscribe to change notifications from the server
+		/// </summary>
+		IDatabaseChanges Changes(string database = null);
+
+		/// <summary>
+		/// Setup the context for aggressive caching.
+		/// </summary>
+		/// <param name="cacheDuration">Specify the aggressive cache duration</param>
+		/// <remarks>
+		/// Aggressive caching means that we will not check the server to see whatever the response
+		/// we provide is current or not, but will serve the information directly from the local cache
+		/// without touching the server.
+		/// </remarks>
+		IDisposable AggressivelyCacheFor(TimeSpan cacheDuration);
+
+		/// <summary>
+		/// Setup the context for no aggressive caching
+		/// </summary>
+		/// <remarks>
+		/// This is mainly useful for internal use inside RavenDB, when we are executing
+		/// queries that has been marked with WaitForNonStaleResults, we temporarily disable
+		/// aggressive caching.
+		/// </remarks>
+		IDisposable DisableAggressiveCaching();
+
 		/// <summary>
 		/// Gets the shared operations headers.
 		/// </summary>
 		/// <value>The shared operations headers.</value>
+#if !SILVERLIGHT
 		NameValueCollection SharedOperationsHeaders { get; }
+#else
+		IDictionary<string,string> SharedOperationsHeaders { get; }
+#endif
 
 		/// <summary>
-		/// Occurs when an entity is stored inside any session opened from this instance
+		/// Get the <see cref="HttpJsonRequestFactory"/> for this store
 		/// </summary>
-		event EventHandler<StoredEntityEventArgs> Stored;
+		HttpJsonRequestFactory JsonRequestFactory { get; }
 
 		/// <summary>
 		/// Gets or sets the identifier for this store.
@@ -32,54 +80,75 @@ namespace Raven.Client
 		/// Initializes this instance.
 		/// </summary>
 		/// <returns></returns>
-        IDocumentStore Initialize();
+		IDocumentStore Initialize();
 
 		/// <summary>
-		/// Registers the delete listener.
+		/// Gets the async database commands.
 		/// </summary>
-		/// <param name="deleteListener">The delete listener.</param>
-		/// <returns></returns>
-    	IDocumentStore RegisterListener(IDocumentDeleteListener deleteListener);
+		/// <value>The async database commands.</value>
+		IAsyncDatabaseCommands AsyncDatabaseCommands { get; }
 
 		/// <summary>
-		/// Registers the store listener.
+		/// Opens the async session.
 		/// </summary>
-		/// <param name="documentStoreListener">The document store listener.</param>
 		/// <returns></returns>
-		IDocumentStore RegisterListener(IDocumentStoreListener documentStoreListener);
+		IAsyncDocumentSession OpenAsyncSession();
 
+		/// <summary>
+		/// Opens the async session.
+		/// </summary>
+		/// <returns></returns>
+		IAsyncDocumentSession OpenAsyncSession(string database);
+
+#if !SILVERLIGHT
 		/// <summary>
 		/// Opens the session.
 		/// </summary>
 		/// <returns></returns>
-        IDocumentSession OpenSession();
+		IDocumentSession OpenSession();
 
-        /// <summary>
-        /// Opens the session for a particular database
-        /// </summary>
-        IDocumentSession OpenSession(string database);
+		/// <summary>
+		/// Opens the session for a particular database
+		/// </summary>
+		IDocumentSession OpenSession(string database);
 
-        /// <summary>
-        /// Opens the session for a particular database with the specified credentials
-        /// </summary>
-        IDocumentSession OpenSession(string database, ICredentials credentialsForSession);
-
-        /// <summary>
-        /// Opens the session with the specified credentials.
-        /// </summary>
-        /// <param name="credentialsForSession">The credentials for session.</param>
-        IDocumentSession OpenSession(ICredentials credentialsForSession);
+		/// <summary>
+		/// Opens the session with the specified options.
+		/// </summary>
+		IDocumentSession OpenSession(OpenSessionOptions sessionOptions);
 
 		/// <summary>
 		/// Gets the database commands.
 		/// </summary>
 		/// <value>The database commands.</value>
-        IDatabaseCommands DatabaseCommands { get; }
+		IDatabaseCommands DatabaseCommands { get; }
+
+		
+		/// <summary>
+		/// Executes the index creation.
+		/// </summary>
+		void ExecuteIndex(AbstractIndexCreationTask indexCreationTask);
+#endif
 
 		/// <summary>
 		/// Gets the conventions.
 		/// </summary>
 		/// <value>The conventions.</value>
-    	DocumentConvention Conventions { get; }
-    }
+		DocumentConvention Conventions { get; }
+
+		/// <summary>
+		/// Gets the URL.
+		/// </summary>
+		string Url { get; }
+
+		///<summary>
+		/// Gets the etag of the last document written by any session belonging to this 
+		/// document store
+		///</summary>
+		Guid? GetLastWrittenEtag();
+
+#if !SILVERLIGHT
+		BulkInsertOperation BulkInsert(string database = null, BulkInsertOptions options = null);
+#endif
+	}
 }

@@ -1,4 +1,9 @@
-namespace Raven.Database.Indexing
+//-----------------------------------------------------------------------
+// <copyright file="FieldStorage.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+namespace Raven.Abstractions.Indexing
 {
 	/// <summary>
 	/// Specifies whether and how a field should be stored.
@@ -13,10 +18,6 @@ namespace Raven.Database.Indexing
 		/// <summary>
 		/// Do not store the field value in the index.
 		/// </summary>
-		No,
-		/// <summary>
-		/// Store the original field value in the index in a compressed form. This is useful for long documents and for binary valued fields.
-		/// </summary>
-		Compress
+		No
 	}
 }

@@ -1,18 +1,24 @@
+//-----------------------------------------------------------------------
+// <copyright file="AutoCreateIndexes.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System.Linq;
+using Raven.Abstractions.Indexing;
 using Raven.Client.Indexes;
 using Raven.Database.Indexing;
 using Xunit;
 
 namespace Raven.Tests.Bugs
 {
-	public class AutoCreateIndexes : LocalClientTest
+	public class AutoCreateIndexes : RavenTest
 	{
 		[Fact]
 		public void CanAutomaticallyCreateIndexes()
 		{
 			using (var store = NewDocumentStore())
 			{
-				IndexCreation.CreateIndexes(typeof(Movies_ByActor).Assembly, store);
+			    new Movies_ByActor().Execute(store);
 
 				using (var s = store.OpenSession())
 				{
@@ -26,7 +32,7 @@ namespace Raven.Tests.Bugs
 
 				using (var s = store.OpenSession())
 				{
-                    var movies = s.Advanced.LuceneQuery<Movie>("Movies/ByActor")
+					var movies = s.Advanced.LuceneQuery<Movie>("Movies/ByActor")
 						.Where("Name:Dolly")
 						.WaitForNonStaleResults()
 						.ToList();
@@ -42,7 +48,7 @@ namespace Raven.Tests.Bugs
 		    {
 		        Map = movies => from movie in movies
 		                        select new {movie.Name};
-                Index(x=>x.Name, FieldIndexing.Analyzed);
+				Index(x=>x.Name, FieldIndexing.Analyzed);
 		    }
 		}
 

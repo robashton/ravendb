@@ -1,7 +1,12 @@
+//-----------------------------------------------------------------------
+// <copyright file="SmnCollationAnalyzer.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 namespace Raven.Database.Indexing.Collation.Cultures
 {
-    
-    public class SmnCollationAnalyzer : AbstractCultureCollationAnalyzer
-    {
-    }
+	
+	public class SmnCollationAnalyzer : AbstractCultureCollationAnalyzer
+	{
+	}
 }

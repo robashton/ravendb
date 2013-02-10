@@ -1,7 +1,16 @@
+//-----------------------------------------------------------------------
+// <copyright file="ViewCompilation.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+using System;
 using System.Collections.Generic;
 using System.Dynamic;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using Lucene.Net.Documents;
+using Raven.Abstractions.Indexing;
+using Raven.Abstractions.Linq;
+using Raven.Json.Linq;
 using Raven.Database.Indexing;
 using Raven.Database.Linq;
 using Raven.Database.Plugins;
@@ -31,7 +40,7 @@ select new {
 
 		public ViewCompilation()
 		{
-			source = ConvertToExpando(new[]
+		    source = ConvertToExpando(new[]
 			{
 				new {blog_id = 3, comments = new object[3], __document_id = 1},
 				new {blog_id = 5, comments = new object[4], __document_id = 1},
@@ -50,7 +59,7 @@ select new {
 		[Fact]
 		public void CanDetectGroupByTarget()
 		{
-			var abstractViewGenerator = new DynamicViewCompiler("test", new IndexDefinition { Map = map, Reduce = reduce }, new AbstractDynamicCompilationExtension[0]).GenerateInstance();
+			var abstractViewGenerator = new DynamicViewCompiler("test", new IndexDefinition { Map = map, Reduce = reduce },  ".").GenerateInstance();
 			var expandoObject = new ExpandoObject();
 			((IDictionary<string,object>)expandoObject).Add("blog_id","1");
 			Assert.Equal("1", abstractViewGenerator.GroupByExtraction(expandoObject));
@@ -59,16 +68,16 @@ select new {
 		[Fact]
 		public void CanCompileQuery()
 		{
-			var abstractViewGenerator = new DynamicViewCompiler("test", new IndexDefinition { Map = map, Reduce = reduce }, new AbstractDynamicCompilationExtension[0]).GenerateInstance();
+			var abstractViewGenerator = new DynamicViewCompiler("test", new IndexDefinition { Map = map, Reduce = reduce },  ".").GenerateInstance();
 			Assert.NotNull(abstractViewGenerator);
 		}
 
 		[Fact]
 		public void CanExecuteQuery()
 		{
-			var dynamicViewCompiler = new DynamicViewCompiler("test", new IndexDefinition { Map = map, Reduce = reduce }, new AbstractDynamicCompilationExtension[0]);
+			var dynamicViewCompiler = new DynamicViewCompiler("test", new IndexDefinition { Map = map, Reduce = reduce },  ".");
 			var abstractViewGenerator = dynamicViewCompiler.GenerateInstance();
-			var mapResults = abstractViewGenerator.MapDefinition(source).ToArray();
+			var mapResults = abstractViewGenerator.MapDefinitions[0](source).ToArray();
 			var results = abstractViewGenerator.ReduceDefinition(mapResults).ToArray();
 			Assert.Equal("{ blog_id = 3, comments_length = 14 }", results[0].ToString());
 			Assert.Equal("{ blog_id = 5, comments_length = 7 }", results[1].ToString());
@@ -80,7 +89,7 @@ select new {
 
 		private static IEnumerable<DynamicJsonObject> ConvertToExpando(IEnumerable<object> objects)
 		{
-			return objects.Select(obj => new DynamicJsonObject(JObject.FromObject(obj)));
+			return objects.Select(obj => new DynamicJsonObject(RavenJObject.FromObject(obj)));
 		}
 	}
 }

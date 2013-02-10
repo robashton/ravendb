@@ -1,10 +1,16 @@
+//-----------------------------------------------------------------------
+// <copyright file="CanDetectChanges.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.Linq;
 using Xunit;
+using Raven.Client.Document;
 
 namespace Raven.Tests.Bugs
 {
-	public class CanDetectChanges : LocalClientTest
+	public class CanDetectChanges : RavenTest
 	{
 		[Fact]
 		public void CanDetectChangesOnNewItem()
@@ -17,9 +23,9 @@ namespace Raven.Tests.Bugs
 					{
 						RegisteredAt = new DateTime(2010, 1, 1)
 					});
-                    Assert.True(session.Advanced.HasChanges);
+					Assert.True(session.Advanced.HasChanges);
 					session.SaveChanges();
-                    Assert.False(session.Advanced.HasChanges);
+					Assert.False(session.Advanced.HasChanges);
 				}
 			}
 		}
@@ -41,14 +47,14 @@ namespace Raven.Tests.Bugs
 				using (var session = store.OpenSession())
 				{
 					var registration = session.Load<ProjectingDates.Registration>("registrations/1");
-                    Assert.False(session.Advanced.HasChanges);
-                    Assert.False(session.Advanced.HasChanged(registration));
+					Assert.False(session.Advanced.HasChanged(registration));
+					Assert.False(session.Advanced.HasChanges);
 					registration.RegisteredAt = new DateTime(2010, 2, 1);
-                    Assert.True(session.Advanced.HasChanges);
-                    Assert.True(session.Advanced.HasChanged(registration));
+					Assert.True(session.Advanced.HasChanges);
+					Assert.True(session.Advanced.HasChanged(registration));
 					session.SaveChanges();
-                    Assert.False(session.Advanced.HasChanges);
-                    Assert.False(session.Advanced.HasChanged(registration));
+					Assert.False(session.Advanced.HasChanges);
+					Assert.False(session.Advanced.HasChanged(registration));
 				}
 			}
 		}
@@ -69,17 +75,17 @@ namespace Raven.Tests.Bugs
 
 				using (var session = store.OpenSession())
 				{
-                    var registration = session.Advanced.LuceneQuery<ProjectingDates.Registration>()
+					var registration = session.Advanced.LuceneQuery<ProjectingDates.Registration>()
 						.WaitForNonStaleResults()
 						.Single();
-                    Assert.False(session.Advanced.HasChanges);
-                    Assert.False(session.Advanced.HasChanged(registration));
+					Assert.False(session.Advanced.HasChanges);
+					Assert.False(session.Advanced.HasChanged(registration));
 					registration.RegisteredAt = new DateTime(2010, 2, 1);
-                    Assert.True(session.Advanced.HasChanges);
-                    Assert.True(session.Advanced.HasChanged(registration));
+					Assert.True(session.Advanced.HasChanges);
+					Assert.True(session.Advanced.HasChanged(registration));
 					session.SaveChanges();
-                    Assert.False(session.Advanced.HasChanges);
-                    Assert.False(session.Advanced.HasChanged(registration));
+					Assert.False(session.Advanced.HasChanges);
+					Assert.False(session.Advanced.HasChanged(registration));
 				}
 			}
 		}
@@ -106,7 +112,7 @@ namespace Raven.Tests.Bugs
 				{
 					for (int i = 0; i < 15; i++)
 					{
-                        session.Advanced.LuceneQuery<ProjectingDates.Registration>().WaitForNonStaleResults().ToArray();
+						session.Advanced.LuceneQuery<ProjectingDates.Registration>().WaitForNonStaleResults().ToArray();
 
 						session.SaveChanges();
 					}
@@ -114,9 +120,45 @@ namespace Raven.Tests.Bugs
 
 				using (var session = store.OpenSession())
 				{
-                    Assert.Equal(2, session.Advanced.LuceneQuery<ProjectingDates.Registration>().WaitForNonStaleResults().Count());
+					Assert.Equal(2, session.Advanced.LuceneQuery<ProjectingDates.Registration>().WaitForNonStaleResults().ToList().Count());
 				}
 			}
+		}
+
+		[Fact]
+		public void CanDetectChangesOnExistingItem_ByteArray()
+		{
+			using (var server = GetNewServer())
+			using (var store = new DocumentStore { Url = "http://localhost:8079" }.Initialize())
+			{
+				var id = string.Empty;
+				using (var session = store.OpenSession())
+				{
+					var doc = new ByteArraySample
+					{
+						Bytes = Guid.NewGuid().ToByteArray(),
+					};
+					session.Store(doc);
+					session.SaveChanges();
+					id = doc.Id;
+				}
+
+				WaitForAllRequestsToComplete(server);
+				server.Server.ResetNumberOfRequests();
+
+				using (var session = store.OpenSession())
+				{
+					var sample = session.Load<ByteArraySample>(id);
+					Assert.False(session.Advanced.HasChanged(sample));
+					Assert.False(session.Advanced.HasChanges);
+				}
+			}
+		}
+
+		public class ByteArraySample
+		{
+			public string Id { get; set; }
+			public byte[] Bytes { get; set; }
 		}
 	}
 }

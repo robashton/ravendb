@@ -1,12 +1,18 @@
-#if !NET_3_5
+//-----------------------------------------------------------------------
+// <copyright file="JsonDynamicConverter.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+#if !SILVERLIGHT
 using System;
 using System.Dynamic;
 using System.Linq.Expressions;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Raven.Database.Linq;
+using Raven.Imports.Newtonsoft.Json;
+using System.Linq;
+using Raven.Abstractions.Linq;
+using Raven.Json.Linq;
 
-namespace Raven.Database.Json
+namespace Raven.Abstractions.Json
 {
 	/// <summary>
 	/// Convert a dynamic variable to a json value and vice versa
@@ -16,7 +22,7 @@ namespace Raven.Database.Json
 		/// <summary>
 		/// Writes the JSON representation of the object.
 		/// </summary>
-		/// <param name="writer">The <see cref="T:Newtonsoft.Json.JsonWriter"/> to write to.</param>
+		/// <param name="writer">The <see cref="T:Raven.Imports.Newtonsoft.Json.JsonWriter"/> to write to.</param>
 		/// <param name="value">The value.</param>
 		/// <param name="serializer">The calling serializer.</param>
 		public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
@@ -40,14 +46,35 @@ namespace Raven.Database.Json
 		/// <summary>
 		/// Reads the JSON representation of the object.
 		/// </summary>
-		/// <param name="reader">The <see cref="T:Newtonsoft.Json.JsonReader"/> to read from.</param>
+		/// <param name="reader">The <see cref="T:Raven.Imports.Newtonsoft.Json.JsonReader"/> to read from.</param>
 		/// <param name="objectType">Type of the object.</param>
 		/// <param name="existingValue">The existing value of object being read.</param>
 		/// <param name="serializer">The calling serializer.</param>
 		/// <returns>The object value.</returns>
 		public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
 		{
-			return new DynamicJsonObject((JObject)JToken.ReadFrom(reader));
+		    var token = RavenJToken.ReadFrom(reader);
+		    var val = token as RavenJValue;
+		    if(val != null)
+		        return val.Value;
+		    var array = token as RavenJArray;
+			if (array != null)
+			{
+				var dynamicJsonObject = new DynamicJsonObject(new RavenJObject());
+				return new DynamicList(array.Select(dynamicJsonObject.TransformToValue).ToArray());
+			}
+
+			var typeName = token.Value<string>("$type");
+			if(typeName != null)
+			{
+				var type = Type.GetType(typeName, false);
+				if(type != null)
+				{
+					return serializer.Deserialize(new RavenJTokenReader(token), type);
+				}
+			}
+
+		    return new DynamicJsonObject((RavenJObject)((RavenJObject)token).CloneToken());
 		}
 
 		/// <summary>
@@ -59,7 +86,7 @@ namespace Raven.Database.Json
 		/// </returns>
 		public override bool CanConvert(Type objectType)
 		{
-			return typeof(IDynamicMetaObjectProvider).IsAssignableFrom(objectType);
+			return objectType == typeof (DynamicJsonObject) || objectType == typeof (object);
 		}
 	}
 }

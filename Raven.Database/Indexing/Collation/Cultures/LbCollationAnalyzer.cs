@@ -1,7 +1,12 @@
+//-----------------------------------------------------------------------
+// <copyright file="LbCollationAnalyzer.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 namespace Raven.Database.Indexing.Collation.Cultures
 {
-    
-    public class LbCollationAnalyzer : AbstractCultureCollationAnalyzer
-    {
-    }
+	
+	public class LbCollationAnalyzer : AbstractCultureCollationAnalyzer
+	{
+	}
 }

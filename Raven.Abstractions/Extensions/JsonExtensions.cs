@@ -1,77 +1,67 @@
+//-----------------------------------------------------------------------
+// <copyright file="JsonExtensions.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.IO;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Bson;
-using Newtonsoft.Json.Linq;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using Raven.Imports.Newtonsoft.Json;
+using Raven.Imports.Newtonsoft.Json.Bson;
+using Raven.Imports.Newtonsoft.Json.Serialization;
+using Raven.Json.Linq;
 
-namespace Raven.Database.Json
+namespace Raven.Abstractions.Extensions
 {
 	/// <summary>
 	/// Json extensions 
 	/// </summary>
 	public static class JsonExtensions
 	{
-	    public static JObject ToJObject(object result)
-        {
-#if !NET_3_5
-            var dynamicJsonObject = result as Raven.Database.Linq.DynamicJsonObject;
-            if (dynamicJsonObject != null)
-                return dynamicJsonObject.Inner;
-#endif
-            if (result is string || result is ValueType)
-            {
-                return new JObject(new JProperty("Value", new JValue(result)));
-            }
-            return JObject.FromObject(result);
-        }
+	    public static RavenJObject ToJObject(object result)
+		{
+			var dynamicJsonObject = result as Linq.IDynamicJsonObject;
+			if (dynamicJsonObject != null)
+				return dynamicJsonObject.Inner;
+			if (result is string || result is ValueType)
+				return new RavenJObject { { "Value", new RavenJValue(result) } };
+			return RavenJObject.FromObject(result);
+		}
 
 		/// <summary>
-		/// Convert a byte array to a JObject
+		/// Convert a byte array to a RavenJObject
 		/// </summary>
-		public static JObject ToJObject(this byte [] self)
+		public static RavenJObject ToJObject(this byte [] self)
 		{
-			return JObject.Load(new BsonReader(new MemoryStream(self))
+			return RavenJObject.Load(new BsonReader(new MemoryStream(self))
 			{
 				DateTimeKindHandling = DateTimeKind.Utc,
 			});
 		}
 
-        /// <summary>
-        /// Convert a byte array to a JObject
-        /// </summary>
-        public static JObject ToJObject(this Stream self)
-        {
-            return JObject.Load(new BsonReader(self)
-            {
-                DateTimeKindHandling = DateTimeKind.Utc,
-            });
-        }
-
 		/// <summary>
-		/// Convert a JToken to a byte array
+		/// Convert a byte array to a RavenJObject
 		/// </summary>
-		public static byte[] ToBytes(this JToken self)
+		public static RavenJObject ToJObject(this Stream self)
 		{
-			using (var memoryStream = new MemoryStream())
+			return RavenJObject.Load(new BsonReader(self)
 			{
-				self.WriteTo(new BsonWriter(memoryStream)
-				{
-					DateTimeKindHandling = DateTimeKind.Unspecified
-				});
-				return memoryStream.ToArray();
-			}
+				DateTimeKindHandling = DateTimeKind.Utc,
+			});
 		}
 
-        /// <summary>
-        /// Convert a JToken to a byte array
-        /// </summary>
-        public static void WriteTo(this JToken self, Stream stream)
-        {
-            self.WriteTo(new BsonWriter(stream)
-            {
-                DateTimeKindHandling = DateTimeKind.Unspecified
-            });
-        }
+		/// <summary>
+		/// Convert a RavenJToken to a byte array
+		/// </summary>
+		public static void WriteTo(this RavenJToken self, Stream stream)
+		{
+			self.WriteTo(new BsonWriter(stream)
+			{
+				DateTimeKindHandling = DateTimeKind.Unspecified
+			}, Default.Converters);
+		}
 
 
 	    /// <summary>
@@ -79,15 +69,76 @@ namespace Raven.Database.Json
 		/// </summary>
 		public static T JsonDeserialization<T>(this byte [] self)
 		{
-			return (T)new JsonSerializer().Deserialize(new BsonReader(new MemoryStream(self)), typeof(T));
+			return (T)CreateDefaultJsonSerializer().Deserialize(new BsonReader(new MemoryStream(self)), typeof(T));
 		}
 
 		/// <summary>
 		/// Deserialize a <param name="self"/> to an instance of<typeparam name="T"/>
 		/// </summary>
-		public static T JsonDeserialization<T>(this JObject self)
+		public static T JsonDeserialization<T>(this RavenJObject self)
 		{
-			return (T)new JsonSerializer().Deserialize(new JTokenReader(self), typeof(T));
+			return (T)CreateDefaultJsonSerializer().Deserialize(new RavenJTokenReader(self), typeof(T));
+		}
+		
+		/// <summary>
+		/// Deserialize a <param name="self"/> to an instance of<typeparam name="T"/>
+		/// </summary>
+		public static T JsonDeserialization<T>(this StreamReader self)
+		{
+			return CreateDefaultJsonSerializer().Deserialize<T>(self);
+		}
+
+		public static T Deserialize<T>(this JsonSerializer self, TextReader reader)
+		{
+			return (T)self.Deserialize(reader, typeof(T));
+		}
+
+		private static readonly IContractResolver contractResolver = new DefaultServerContractResolver(shareCache: true)
+		{
+			DefaultMembersSearchFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+		};
+
+		private class DefaultServerContractResolver : DefaultContractResolver
+		{
+			public DefaultServerContractResolver(bool shareCache) : base(shareCache)
+			{
+			}
+
+			protected override System.Collections.Generic.List<MemberInfo> GetSerializableMembers(Type objectType)
+			{
+				var serializableMembers = base.GetSerializableMembers(objectType);
+				foreach (var toRemove in serializableMembers
+					.Where(MembersToFilterOut)
+					.ToArray())
+				{
+					serializableMembers.Remove(toRemove);
+				}
+				return serializableMembers;
+			}
+
+			private static bool MembersToFilterOut(MemberInfo info)
+			{
+				if (info is EventInfo)
+					return true;
+				var fieldInfo = info as FieldInfo;
+				if (fieldInfo != null && !fieldInfo.IsPublic)
+					return true;
+				return info.GetCustomAttributes(typeof(CompilerGeneratedAttribute), true).Length > 0;
+			} 
+		}
+
+		public static JsonSerializer CreateDefaultJsonSerializer()
+		{
+			var jsonSerializer = new JsonSerializer
+			{
+				DateParseHandling = DateParseHandling.None,
+				ContractResolver = contractResolver
+			};
+			foreach (var defaultJsonConverter in Default.Converters)
+			{
+				jsonSerializer.Converters.Add(defaultJsonConverter);
+			}
+			return jsonSerializer;
 		}
 	}
 }

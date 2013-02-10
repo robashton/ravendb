@@ -1,9 +1,14 @@
+//-----------------------------------------------------------------------
+// <copyright file="EntityWithDate.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using Xunit;
 
 namespace Raven.Tests.Bugs
 {
-	public class EntityWithDate : LocalClientTest
+	public class EntityWithDate : RavenTest
 	{
 		[Fact]
 		public void CanSerializeAndDeserializeEntityWithDates()

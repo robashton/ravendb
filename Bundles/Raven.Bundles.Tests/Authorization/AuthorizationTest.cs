@@ -1,14 +1,16 @@
+//-----------------------------------------------------------------------
+// <copyright file="AuthorizationTest.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 extern alias database;
 
 using System;
 using System.Collections;
 using System.ComponentModel.Composition.Hosting;
-using System.IO;
 using System.Web;
 using Raven.Bundles.Authorization;
 using Raven.Client.Document;
-using Raven.Database;
-using Raven.Http;
 using Raven.Server;
 
 namespace Raven.Bundles.Tests.Authorization
@@ -32,12 +34,14 @@ namespace Raven.Bundles.Tests.Authorization
 
 		protected AuthorizationTest()
 		{
-		    database::Raven.Database.Extensions.IOExtensions.DeleteDirectory("Data");
-            server = new RavenDbServer(new database::Raven.Database.Config.RavenConfiguration
+			database::Raven.Database.Extensions.IOExtensions.DeleteDirectory("Data");
+			database::Raven.Database.Extensions.IOExtensions.DeleteDirectory("Testing");
+			database::Raven.Database.Extensions.IOExtensions.DeleteDirectory("Tenants");
+			server = new RavenDbServer(new database::Raven.Database.Config.RavenConfiguration
 			{
-				AnonymousUserAccessMode = AnonymousUserAccessMode.All,
+				AnonymousUserAccessMode = database::Raven.Database.Server.AnonymousUserAccessMode.All,
 				Catalog = { Catalogs = { new AssemblyCatalog(typeof(AuthorizationDecisions).Assembly) } },
-				DataDirectory = "Data",
+				Port = 8079,
 				RunInUnreliableYetFastModeThatIsNotSuitableForProduction = true,
 			});
 			store = new DocumentStore { Url = server.Database.Configuration.ServerUrl };

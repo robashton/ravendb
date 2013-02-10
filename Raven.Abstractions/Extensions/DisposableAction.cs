@@ -1,6 +1,11 @@
+//-----------------------------------------------------------------------
+// <copyright file="DisposableAction.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 
-namespace Raven.Database.Data
+namespace Raven.Abstractions.Extensions
 {
 	/// <summary>
 	/// A helper class that translate between Disposable and Action

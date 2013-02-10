@@ -1,7 +1,12 @@
+//-----------------------------------------------------------------------
+// <copyright file="TkCollationAnalyzer.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 namespace Raven.Database.Indexing.Collation.Cultures
 {
-    
-    public class TkCollationAnalyzer : AbstractCultureCollationAnalyzer
-    {
-    }
+	
+	public class TkCollationAnalyzer : AbstractCultureCollationAnalyzer
+	{
+	}
 }

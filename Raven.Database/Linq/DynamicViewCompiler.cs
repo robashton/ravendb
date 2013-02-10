@@ -1,14 +1,24 @@
+//-----------------------------------------------------------------------
+// <copyright file="DynamicViewCompiler.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
-using System.Web;
-using ICSharpCode.NRefactory.Ast;
-using ICSharpCode.NRefactory.PrettyPrinter;
+using ICSharpCode.NRefactory;
+using ICSharpCode.NRefactory.CSharp;
+using Raven.Abstractions.Data;
+using Raven.Abstractions.Indexing;
+using Raven.Abstractions.MEF;
+using Raven.Database.Config;
 using Raven.Database.Extensions;
-using Raven.Database.Indexing;
 using System.Linq;
+using Raven.Database.Linq.Ast;
 using Raven.Database.Plugins;
+using Raven.Database.Util;
 
 namespace Raven.Database.Linq
 {
@@ -20,17 +30,58 @@ namespace Raven.Database.Linq
 	public class DynamicViewCompiler
 	{
 		private readonly IndexDefinition indexDefinition;
-		private readonly AbstractDynamicCompilationExtension[] extensions;
+		private readonly OrderedPartCollection<AbstractDynamicCompilationExtension> extensions;
+		private readonly string basePath;
 		private const string mapReduceTextToken = "96E65595-1C9E-4BFB-A0E5-80BF2D6FC185";
 
 		private readonly string name;
+		private readonly CaptureSelectNewFieldNamesVisitor captureSelectNewFieldNamesVisitor = new CaptureSelectNewFieldNamesVisitor();
+		private readonly CaptureQueryParameterNamesVisitor captureQueryParameterNamesVisitorForMap = new CaptureQueryParameterNamesVisitor();
+		private readonly CaptureQueryParameterNamesVisitor captureQueryParameterNamesVisitorForReduce = new CaptureQueryParameterNamesVisitor();
 
-		public DynamicViewCompiler(string name, IndexDefinition indexDefinition, AbstractDynamicCompilationExtension[] extensions)
+		public DynamicViewCompiler(string name, IndexDefinition indexDefinition, string basePath)
+			: this(name, indexDefinition, new OrderedPartCollection<AbstractDynamicCompilationExtension>(), basePath, new InMemoryRavenConfiguration())
+		{ }
+
+		public DynamicViewCompiler(string name, IndexDefinition indexDefinition, OrderedPartCollection<AbstractDynamicCompilationExtension> extensions, string basePath, InMemoryRavenConfiguration configuration)
 		{
 			this.indexDefinition = indexDefinition;
 			this.extensions = extensions;
+			if (configuration.RunInMemory == false)
+			{
+				this.basePath = Path.Combine(basePath, "TemporaryIndexDefinitionsAsSource");
+				if (Directory.Exists(this.basePath) == false)
+				{
+					Directory.CreateDirectory(this.basePath);
+				}
+				else
+				{
+					MaybeCleanupDirectory(this.basePath);
+				}
+			}
 			this.name = MonoHttpUtility.UrlEncode(name);
-		    RequiresSelectNewAnonymousType = true;
+			RequiresSelectNewAnonymousType = true;
+		}
+
+		private static readonly ConcurrentSet<string> paths = new ConcurrentSet<string>(StringComparer.InvariantCultureIgnoreCase);
+
+		private static void MaybeCleanupDirectory(string path)
+		{
+			if (paths.TryAdd(path) == false)
+				return;
+
+			foreach (var file in Directory.GetFiles(path, "*.dll"))
+			{
+				try
+				{
+					File.Delete(file);
+				}
+				catch (Exception)
+				{
+					// failure here is expected, this is probably another index that is currently
+					// live that is locking the file, we will get it next restart
+				}
+			}
 		}
 
 		public string CompiledQueryText { get; set; }
@@ -45,303 +96,457 @@ namespace Raven.Database.Linq
 
 		private void TransformQueryToClass()
 		{
-			string entityName;
-			var mapDefinition = TransformMapDefinition(out entityName);
 
-			CSharpSafeName = "Index_"+ Regex.Replace(Name, @"[^\w\d]", "_");
-			var type = new TypeDeclaration(Modifiers.Public, new List<AttributeSection>())
+			CSharpSafeName = "Index_" + Regex.Replace(Name, @"[^\w\d]", "_");
+			var type = new TypeDeclaration
 			{
+				Modifiers = Modifiers.Public,
 				BaseTypes =
 					{
-						new TypeReference("AbstractViewGenerator")
+						new SimpleType(typeof(AbstractViewGenerator).FullName)
 					},
 				Name = CSharpSafeName,
-				Type = ClassType.Class
+				ClassType = ClassType.Class
 			};
 
-			var ctor = new ConstructorDeclaration(CSharpSafeName,
-			                                      Modifiers.Public,
-			                                      new List<ParameterDeclarationExpression>(), null);
-			type.Children.Add(ctor);
-			ctor.Body = new BlockStatement();
-			//this.ForEntityName = entityName;
-			ctor.Body.AddChild(new ExpressionStatement(
-								new AssignmentExpression(
-									new MemberReferenceExpression(new ThisReferenceExpression(), "ForEntityName"),
-									AssignmentOperatorType.Assign,
-									new PrimitiveExpression(entityName, entityName))));
+
+			var body = new BlockStatement();
 
 			// this.ViewText = "96E65595-1C9E-4BFB-A0E5-80BF2D6FC185"; // Will be replaced later
-			ctor.Body.AddChild(new ExpressionStatement(
-			                   	new AssignmentExpression(
-			                   		new MemberReferenceExpression(new ThisReferenceExpression(), "ViewText"),
-			                   		AssignmentOperatorType.Assign,
-			                   		new PrimitiveExpression(mapReduceTextToken, mapReduceTextToken))));
+			var viewText = new ExpressionStatement(
+				new AssignmentExpression(
+					new MemberReferenceExpression(new ThisReferenceExpression(), "ViewText"),
+					AssignmentOperatorType.Assign,
+					new StringLiteralExpression(mapReduceTextToken)));
+			body.Statements.Add(viewText);
 
-			// this.MapDefinition = from doc in docs ...;
-			ctor.Body.AddChild(new ExpressionStatement(
-			                   	new AssignmentExpression(
-			                   		new MemberReferenceExpression(new ThisReferenceExpression(), "MapDefinition"),
-			                   		AssignmentOperatorType.Assign,
-			                   		new LambdaExpression
-			                   		{
-			                   			Parameters =
-			                   				{
-			                   					new ParameterDeclarationExpression(null, "docs")
-			                   				},
-			                   			ExpressionBody = mapDefinition.Initializer
-			                   		})));
-
-
-		    var captureSelectNewFieldNamesVisitor = new CaptureSelectNewFieldNamesVisitor();
-
-		    mapDefinition.Initializer.AcceptVisitor(captureSelectNewFieldNamesVisitor, null);
-
-            if(indexDefinition.TransformResults != null)
-            {
-                VariableDeclaration translatorDeclaration;
-                
-                if (indexDefinition.TransformResults.Trim().StartsWith("from"))
-                {
-                    translatorDeclaration = QueryParsingUtils.GetVariableDeclarationForLinqQuery(indexDefinition.TransformResults, requiresSelectNewAnonymousType:false);
-                }
-                else
-                {
-                    translatorDeclaration = QueryParsingUtils.GetVariableDeclarationForLinqMethods(indexDefinition.TransformResults);
-                }
-
-
-                // this.Translator = (Database,results) => from doc in results ...;
-                ctor.Body.AddChild(new ExpressionStatement(
-                                    new AssignmentExpression(
-                                        new MemberReferenceExpression(new ThisReferenceExpression(), "TransformResultsDefinition"),
-                                        AssignmentOperatorType.Assign,
-                                        new LambdaExpression
-                                        {
-                                            Parameters =
-			                   				{
-			                   					new ParameterDeclarationExpression(null, "Database"),
-                                                new ParameterDeclarationExpression(null, "results")
-			                   				},
-                                            ExpressionBody = translatorDeclaration.Initializer
-                                        })));
-            }
-
-			if (indexDefinition.IsMapReduce)
+			var ctor = new ConstructorDeclaration
 			{
-				VariableDeclaration reduceDefiniton;
-				Expression groupBySource;
-				string groupByParamter;
-				if (indexDefinition.Reduce.Trim().StartsWith("from"))
-				{
-					reduceDefiniton = QueryParsingUtils.GetVariableDeclarationForLinqQuery(indexDefinition.Reduce, RequiresSelectNewAnonymousType);
-					var sourceSelect = (QueryExpression)((QueryExpression)reduceDefiniton.Initializer).FromClause.InExpression;
-					groupBySource = ((QueryExpressionGroupClause)sourceSelect.SelectOrGroupClause).GroupBy;
-					groupByParamter = sourceSelect.FromClause.Identifier;
-				}
-				else
-				{
-					reduceDefiniton = QueryParsingUtils.GetVariableDeclarationForLinqMethods(indexDefinition.Reduce);
-					var invocation = ((InvocationExpression) reduceDefiniton.Initializer);
-					var target = (MemberReferenceExpression) invocation.TargetObject;
-					while(target.MemberName!="GroupBy")
-					{
-						invocation = (InvocationExpression) target.TargetObject;
-						target = (MemberReferenceExpression)invocation.TargetObject;
-					}
-					var lambdaExpression = ((LambdaExpression)invocation.Arguments[0]);
-					groupByParamter = lambdaExpression.Parameters[0].ParameterName;
-					groupBySource = lambdaExpression.ExpressionBody;
-				}
-
-                captureSelectNewFieldNamesVisitor.FieldNames.Clear();// reduce override the map fields
-                reduceDefiniton.Initializer.AcceptVisitor(captureSelectNewFieldNamesVisitor, null);
-
-				// this.ReduceDefinition = from result in results...;
-				ctor.Body.AddChild(new ExpressionStatement(
-				                   	new AssignmentExpression(
-				                   		new MemberReferenceExpression(new ThisReferenceExpression(),
-				                   		                              "ReduceDefinition"),
-				                   		AssignmentOperatorType.Assign,
-				                   		new LambdaExpression
-				                   		{
-				                   			Parameters =
-				                   				{
-				                   					new ParameterDeclarationExpression(null, "results")
-				                   				},
-				                   			ExpressionBody = reduceDefiniton.Initializer
-				                   		})));
-				
-				ctor.Body.AddChild(new ExpressionStatement(
-				                   	new AssignmentExpression(
-				                   		new MemberReferenceExpression(new ThisReferenceExpression(),
-				                   		                              "GroupByExtraction"),
-				                   		AssignmentOperatorType.Assign,
-				                   		new LambdaExpression
-				                   		{
-											Parameters =
-												{
-													new ParameterDeclarationExpression(null, groupByParamter)
-												},
-											ExpressionBody = groupBySource
-				                   		})));
+				Name = CSharpSafeName,
+				Modifiers = Modifiers.Public,
+				Body = body
+			};
+			type.Members.Add(ctor);
+			foreach (var map in indexDefinition.Maps)
+			{
+				HandleMapFunction(ctor, map);
 			}
 
-		    foreach (var fieldName in captureSelectNewFieldNamesVisitor.FieldNames)
-		    {
-		        ctor.Body.AddChild(
-		            new ExpressionStatement(
-                        new InvocationExpression(
-                            new MemberReferenceExpression(
-                                new ThisReferenceExpression(),
-                                "AddField"
-                                ),
-                            new List<Expression> { new PrimitiveExpression(fieldName, fieldName) }
-                            )
-		                )
-		            );
-		    }
+			HandleTransformResults(ctor);
+
+			HandleReduceDefinition(ctor);
+
+			AddAdditionalInformation(ctor);
 
 			CompiledQueryText = QueryParsingUtils.GenerateText(type, extensions);
-			var compiledQueryText = "@\"" + indexDefinition.Map.Replace("\"", "\"\"");
-			if (indexDefinition.Reduce != null)
+			var sb = new StringBuilder("@\"");
+
+			foreach (var map in indexDefinition.Maps)
 			{
-				compiledQueryText += Environment.NewLine + indexDefinition.Reduce.Replace("\"", "\"\"");
+				sb.AppendLine(map.Replace("\"", "\"\""));
 			}
 
-            if (indexDefinition.TransformResults != null)
-            {
-                compiledQueryText += Environment.NewLine + indexDefinition.TransformResults.Replace("\"", "\"\"");
-            }
+			if (indexDefinition.Reduce != null)
+			{
+				sb.AppendLine(indexDefinition.Reduce.Replace("\"", "\"\""));
+			}
 
-			compiledQueryText += "\"";
-			CompiledQueryText = CompiledQueryText.Replace("\"" + mapReduceTextToken + "\"",
-			                                              compiledQueryText);
+			if (indexDefinition.TransformResults != null)
+			{
+				sb.AppendLine(indexDefinition.TransformResults.Replace("\"", "\"\""));
+			}
+			sb.Length = sb.Length - 2;
+
+			sb.Append("\"");
+			CompiledQueryText = CompiledQueryText.Replace('"' + mapReduceTextToken + '"', sb.ToString());
 		}
 
-	    public bool RequiresSelectNewAnonymousType { get; set; }
-
-	    private VariableDeclaration TransformMapDefinition(out string entityName)
+		private bool firstMap = true;
+		private void HandleMapFunction(ConstructorDeclaration ctor, string map)
 		{
-			if (indexDefinition.Map.Trim().StartsWith("from"))
-				return TransformMapDefinitionFromLinqQuerySyntax(out entityName);
-			return TransformMapDefinitionFromLinqMethodSyntax(out entityName);
+			string entityName;
+
+			VariableInitializer mapDefinition = map.Trim().StartsWith("from") ?
+				TransformMapDefinitionFromLinqQuerySyntax(map, out entityName) :
+				TransformMapDefinitionFromLinqMethodSyntax(map, out entityName);
+
+			if (string.IsNullOrEmpty(entityName) == false)
+			{
+				//this.ForEntityNames.Add(entityName);
+				ctor.Body.Statements.Add(new ExpressionStatement(
+									new InvocationExpression(
+										new MemberReferenceExpression(
+											new MemberReferenceExpression(new ThisReferenceExpression(), "ForEntityNames"), "Add"),
+										new List<Expression> { new StringLiteralExpression(entityName) })
+									));
+			}
+			// this.AddMapDefinition(from doc in docs ...);
+			ctor.Body.Statements.Add(new ExpressionStatement(
+								   new InvocationExpression(
+									   new MemberReferenceExpression(new ThisReferenceExpression(), "AddMapDefinition"),
+									   new List<Expression>
+					                   {
+						                   new LambdaExpression
+						                   {
+							                   Parameters =
+							                   {
+								                   new ParameterDeclaration(null, "docs")
+							                   },
+							                   Body = mapDefinition.Initializer.Clone()
+						                   }
+					                   }
+									   )));
+
+
+			if (firstMap)
+			{
+				mapDefinition.Initializer.AcceptVisitor(captureSelectNewFieldNamesVisitor, null);
+				firstMap = false;
+			}
+			else
+			{
+				var secondMapFieldNames = new CaptureSelectNewFieldNamesVisitor();
+				mapDefinition.Initializer.AcceptVisitor(secondMapFieldNames, null);
+				if (secondMapFieldNames.FieldNames.SetEquals(captureSelectNewFieldNamesVisitor.FieldNames) == false)
+				{
+					var message = string.Format(@"Map functions defined as part of a multi map index must return identical types.
+Baseline map		: {0}
+Non matching map	: {1}
+
+Common fields		: {2}
+Missing fields		: {3}
+Additional fields	: {4}", indexDefinition.Maps.First(),
+												map,
+												string.Join(", ", captureSelectNewFieldNamesVisitor.FieldNames.Intersect(secondMapFieldNames.FieldNames)),
+												string.Join(", ", captureSelectNewFieldNamesVisitor.FieldNames.Except(secondMapFieldNames.FieldNames)),
+												string.Join(", ", secondMapFieldNames.FieldNames.Except(captureSelectNewFieldNamesVisitor.FieldNames))
+						);
+					throw new InvalidOperationException(message);
+				}
+			}
+
+			mapDefinition.Initializer.AcceptVisitor(new ThrowOnInvalidMethodCalls(null), null);
+			mapDefinition.Initializer.AcceptVisitor(captureQueryParameterNamesVisitorForMap, null);
 		}
 
-		private VariableDeclaration TransformMapDefinitionFromLinqMethodSyntax(out string entityName)
+		private void HandleTransformResults(ConstructorDeclaration ctor)
 		{
-			var variableDeclaration = QueryParsingUtils.GetVariableDeclarationForLinqMethods(indexDefinition.Map);
+			if (string.IsNullOrEmpty(indexDefinition.TransformResults))
+				return;
+
+			VariableInitializer translatorDeclaration;
+
+			if (indexDefinition.TransformResults.Trim().StartsWith("from"))
+			{
+				translatorDeclaration = QueryParsingUtils.GetVariableDeclarationForLinqQuery(indexDefinition.TransformResults, requiresSelectNewAnonymousType: false);
+			}
+			else
+			{
+				translatorDeclaration = QueryParsingUtils.GetVariableDeclarationForLinqMethods(indexDefinition.TransformResults, requiresSelectNewAnonymousType: false);
+			}
+
+			translatorDeclaration.AcceptVisitor(new ThrowOnInvalidMethodCallsForTransformResults(), null);
+
+
+			// this.Translator = (Database,results) => from doc in results ...;
+			ctor.Body.Statements.Add(new ExpressionStatement(
+								new AssignmentExpression(
+									new MemberReferenceExpression(new ThisReferenceExpression(), "TransformResultsDefinition"),
+									AssignmentOperatorType.Assign,
+									new LambdaExpression
+									{
+										Parameters =
+			                   				{
+			                   					new ParameterDeclaration(null, "Database"),
+			                   					new ParameterDeclaration(null, "results")
+			                   				},
+										Body = translatorDeclaration.Initializer.Clone()
+									})));
+		}
+
+		private void HandleReduceDefinition(ConstructorDeclaration ctor)
+		{
+			if (!indexDefinition.IsMapReduce)
+				return;
+			VariableInitializer reduceDefinition;
+			AstNode groupBySource;
+			string groupByParameter;
+			string groupByIdentifier;
+			if (indexDefinition.Reduce.Trim().StartsWith("from"))
+			{
+				reduceDefinition = QueryParsingUtils.GetVariableDeclarationForLinqQuery(indexDefinition.Reduce, RequiresSelectNewAnonymousType);
+				var queryExpression = ((QueryExpression)reduceDefinition.Initializer);
+				var queryContinuationClause = queryExpression.Clauses.OfType<QueryContinuationClause>().First();
+				var queryGroupClause = queryContinuationClause.PrecedingQuery.Clauses.OfType<QueryGroupClause>().First();
+				groupByIdentifier = queryContinuationClause.Identifier;
+				groupBySource = queryGroupClause.Key;
+				groupByParameter = queryContinuationClause.PrecedingQuery.Clauses.OfType<QueryFromClause>().First().Identifier;
+			}
+			else
+			{
+				reduceDefinition = QueryParsingUtils.GetVariableDeclarationForLinqMethods(indexDefinition.Reduce, RequiresSelectNewAnonymousType);
+				var initialInvocation = ((InvocationExpression)reduceDefinition.Initializer);
+				var invocation = initialInvocation;
+				var target = (MemberReferenceExpression)invocation.Target;
+				while (target.MemberName != "GroupBy")
+				{
+					invocation = (InvocationExpression)target.Target;
+					target = (MemberReferenceExpression)invocation.Target;
+				}
+				var lambdaExpression = GetLambdaExpression(invocation);
+				groupByParameter = lambdaExpression.Parameters.First().Name;
+				groupBySource = lambdaExpression.Body;
+				groupByIdentifier = null;
+			}
+
+			var mapFields = captureSelectNewFieldNamesVisitor.FieldNames.ToList();
+			captureSelectNewFieldNamesVisitor.Clear();// reduce override the map fields
+			reduceDefinition.Initializer.AcceptVisitor(captureSelectNewFieldNamesVisitor, null);
+			reduceDefinition.Initializer.AcceptVisitor(captureQueryParameterNamesVisitorForReduce, null);
+			reduceDefinition.Initializer.AcceptVisitor(new ThrowOnInvalidMethodCalls(groupByIdentifier), null);
+
+			ValidateMapReduceFields(mapFields);
+
+			// this.ReduceDefinition = from result in results...;
+			ctor.Body.Statements.Add(new ExpressionStatement(
+								new AssignmentExpression(
+									new MemberReferenceExpression(new ThisReferenceExpression(),
+																  "ReduceDefinition"),
+									AssignmentOperatorType.Assign,
+									new LambdaExpression
+									{
+										Parameters =
+			                   				{
+			                   					new ParameterDeclaration(null, "results")
+			                   				},
+										Body = reduceDefinition.Initializer.Clone()
+									})));
+
+			ctor.Body.Statements.Add(new ExpressionStatement(
+								new AssignmentExpression(
+									new MemberReferenceExpression(new ThisReferenceExpression(),
+																  "GroupByExtraction"),
+									AssignmentOperatorType.Assign,
+									new LambdaExpression
+									{
+										Parameters =
+			                   				{
+			                   					new ParameterDeclaration(null, groupByParameter)
+			                   				},
+										Body = groupBySource.Clone()
+									})));
+		}
+
+		private static LambdaExpression GetLambdaExpression(InvocationExpression invocation)
+		{
+			var expression = invocation.Arguments.First();
+			var castExpression = expression as CastExpression;
+			if (castExpression != null)
+			{
+				expression = castExpression.Expression;
+			}
+			var parenthesizedExpression = expression as ParenthesizedExpression;
+			if (parenthesizedExpression != null)
+			{
+				expression = parenthesizedExpression.Expression;
+			}
+			return ((LambdaExpression)expression);
+		}
+
+		private void ValidateMapReduceFields(List<string> mapFields)
+		{
+			mapFields.Remove("__document_id");
+			var reduceFields = captureSelectNewFieldNamesVisitor.FieldNames;
+			if (reduceFields.SetEquals(mapFields) == false)
+			{
+				throw new InvalidOperationException(
+					string.Format(
+						@"The result type is not consistent across map and reduce:
+Common fields: {0}
+Map only fields   : {1}
+Reduce only fields: {2}
+",
+						string.Join(", ", mapFields.Intersect(reduceFields).OrderBy(x => x)),
+						string.Join(", ", mapFields.Except(reduceFields).OrderBy(x => x)),
+						string.Join(", ", reduceFields.Except(mapFields).OrderBy(x => x))));
+			}
+		}
+
+		private void AddAdditionalInformation(ConstructorDeclaration ctor)
+		{
+			AddInformation(ctor, captureSelectNewFieldNamesVisitor.FieldNames, "AddField");
+			AddInformation(ctor, captureQueryParameterNamesVisitorForMap.QueryParameters, "AddQueryParameterForMap");
+			AddInformation(ctor, captureQueryParameterNamesVisitorForMap.QueryParameters, "AddQueryParameterForReduce");
+		}
+
+		private static void AddInformation(ConstructorDeclaration ctor, HashSet<string> fieldNames, string methodToCall)
+		{
+			foreach (var fieldName in fieldNames)
+			{
+				ctor.Body.Statements.Add(
+					new ExpressionStatement(
+						new InvocationExpression(
+							new MemberReferenceExpression(
+								new ThisReferenceExpression(),
+								methodToCall
+								),
+							new List<Expression> { new StringLiteralExpression(fieldName) }
+							)
+						));
+			}
+		}
+
+		public bool RequiresSelectNewAnonymousType { get; set; }
+
+		private VariableInitializer TransformMapDefinitionFromLinqMethodSyntax(string query, out string entityName)
+		{
+			var variableDeclaration = QueryParsingUtils.GetVariableDeclarationForLinqMethods(query, RequiresSelectNewAnonymousType);
 			AddEntityNameFilteringIfNeeded(variableDeclaration, out entityName);
 
-            variableDeclaration.AcceptVisitor(new AddDocumentIdToLambdas(), null);
+			variableDeclaration.AcceptVisitor(new AddDocumentIdToLambdas(), null);
 			return variableDeclaration;
 		}
 
-        public class AddDocumentIdToLambdas : ICSharpCode.NRefactory.Visitors.AbstractAstTransformer
-        {
-            public override object VisitLambdaExpression(LambdaExpression lambdaExpression, object data)
-            {
-                AddDocumentIdFieldToLambdaIfCreatingNewObject(lambdaExpression);
-                return base.VisitLambdaExpression(lambdaExpression, data);
-            }
-        }
+		[CLSCompliant(false)]
+		public class AddDocumentIdToLambdas : DepthFirstAstVisitor<object, object>
+		{
+			public override object VisitLambdaExpression(LambdaExpression lambdaExpression, object data)
+			{
+				if (AddDocumentIdFieldToLambdaIfCreatingNewObject(lambdaExpression))
+					return null;
+				return base.VisitLambdaExpression(lambdaExpression, data);
+			}
 
-		private void AddEntityNameFilteringIfNeeded(VariableDeclaration variableDeclaration, out string entityName)
+			private bool AddDocumentIdFieldToLambdaIfCreatingNewObject(LambdaExpression lambdaExpression)
+			{
+				var objectCreateExpression = QueryParsingUtils.GetAnonymousCreateExpression(lambdaExpression.Body) as AnonymousTypeCreateExpression;
+
+				if (objectCreateExpression == null)
+					return false;
+
+				var initializers = objectCreateExpression.Initializers;
+
+				var identifierExpression = new IdentifierExpression(lambdaExpression.Parameters.First().Name);
+
+				if (initializers.OfType<NamedExpression>().Any(x => x.Name == Constants.DocumentIdFieldName))
+					return false;
+
+				objectCreateExpression.Initializers.Add(new NamedExpression
+				{
+					Name = Constants.DocumentIdFieldName,
+					Expression = new MemberReferenceExpression(identifierExpression, Constants.DocumentIdFieldName)
+				});
+
+				return true;
+			}
+
+		}
+
+		private void AddEntityNameFilteringIfNeeded(VariableInitializer variableDeclaration, out string entityName)
 		{
 			entityName = null;
 			var invocationExpression = ((InvocationExpression)variableDeclaration.Initializer);
-			var targetExpression = ((MemberReferenceExpression)invocationExpression.TargetObject);
-			while (targetExpression.TargetObject is InvocationExpression)
+			var targetExpression = ((MemberReferenceExpression)invocationExpression.Target);
+			while (targetExpression.Target is InvocationExpression)
 			{
-				invocationExpression = (InvocationExpression) targetExpression.TargetObject;
-				targetExpression = (MemberReferenceExpression)invocationExpression.TargetObject;
+				invocationExpression = (InvocationExpression)targetExpression.Target;
+				targetExpression = (MemberReferenceExpression)invocationExpression.Target;
 			}
-			if (targetExpression.TargetObject is MemberReferenceExpression) // collection
+			if (targetExpression.Target is MemberReferenceExpression) // collection
 			{
-				var mre = (MemberReferenceExpression)targetExpression.TargetObject;
+				var mre = (MemberReferenceExpression)targetExpression.Target;
 				entityName = mre.MemberName;
 				//doc["@metadata"]["Raven-Entity-Name"]
 				var metadata = new IndexerExpression(
-					new IndexerExpression(new IdentifierExpression("__document"), new List<Expression> { new PrimitiveExpression("@metadata", "@metadata") }),
-					new List<Expression> { new PrimitiveExpression("Raven-Entity-Name", "Raven-Entity-Name") }
+					new IndexerExpression(new IdentifierExpression("__document"), new List<Expression> { new StringLiteralExpression("@metadata") }),
+					new List<Expression> { new StringLiteralExpression(Constants.RavenEntityName) }
 					);
-				var whereMethod = new InvocationExpression(new MemberReferenceExpression(mre.TargetObject, "Where"),
-				                                           new List<Expression>
+
+				// string.Equals(doc["@metadata"]["Raven-Entity-Name"], "Blogs", StringComparison.InvariantCultureIgnoreCase)
+				var binaryOperatorExpression =
+					new InvocationExpression(
+						new MemberReferenceExpression(new TypeReferenceExpression(new PrimitiveType("string")), "Equals"),
+						new List<Expression>
+						{
+							metadata,
+							new StringLiteralExpression(mre.MemberName),
+							new MemberReferenceExpression(new TypeReferenceExpression(new SimpleType(typeof(StringComparison).FullName)),"InvariantCultureIgnoreCase")
+						});
+				var whereMethod = new InvocationExpression(new MemberReferenceExpression(mre.Target.Clone(), "Where"),
+														   new List<Expression>
 				                                           {
 				                                           	new LambdaExpression
 				                                           	{
 				                                           		Parameters =
 				                                           			{
-				                                           				new ParameterDeclarationExpression(null, "__document")
+				                                           				new ParameterDeclaration(null, "__document")
 				                                           			},
-				                                           		ExpressionBody = new BinaryOperatorExpression(
-				                                           			metadata,
-				                                           			BinaryOperatorType.Equality,
-				                                           			new PrimitiveExpression(mre.MemberName, mre.MemberName)
-				                                           			)
+				                                           		Body = binaryOperatorExpression.Clone()
 				                                           	}
 				                                           });
 
-				invocationExpression.TargetObject = new MemberReferenceExpression(whereMethod, targetExpression.MemberName);
+				invocationExpression.Target = new MemberReferenceExpression(whereMethod.Clone(), targetExpression.MemberName);
 
 			}
 		}
 
-		private static void AddDocumentIdFieldToLambdaIfCreatingNewObject(LambdaExpression lambdaExpression)
-		{
-			if (lambdaExpression.ExpressionBody is ObjectCreateExpression == false)
-				return;
-			var objectInitializer = ((ObjectCreateExpression)lambdaExpression.ExpressionBody).ObjectInitializer;
 
-			var identifierExpression = new IdentifierExpression(lambdaExpression.Parameters[0].ParameterName);
-			objectInitializer.CreateExpressions.Add(
-				new NamedArgumentExpression
-				{
-					Name = "__document_id",
-					Expression = new MemberReferenceExpression(identifierExpression, "__document_id")
-				});
-		}
-
-		private VariableDeclaration TransformMapDefinitionFromLinqQuerySyntax(out string entityName)
+		private VariableInitializer TransformMapDefinitionFromLinqQuerySyntax(string query, out string entityName)
 		{
 			entityName = null;
-			var variableDeclaration = QueryParsingUtils.GetVariableDeclarationForLinqQuery(indexDefinition.Map, RequiresSelectNewAnonymousType);
-			var queryExpression = ((QueryExpression) variableDeclaration.Initializer);
-			var expression = queryExpression.FromClause.InExpression;
-			if(expression is MemberReferenceExpression) // collection
+			var variableDeclaration = QueryParsingUtils.GetVariableDeclarationForLinqQuery(query, RequiresSelectNewAnonymousType);
+			var queryExpression = ((QueryExpression)variableDeclaration.Initializer);
+			var fromClause = queryExpression.Clauses.OfType<QueryFromClause>().First();
+			var expression = fromClause.Expression;
+			if (expression is MemberReferenceExpression) // collection
 			{
 				var mre = (MemberReferenceExpression)expression;
 				entityName = mre.MemberName;
-				queryExpression.FromClause.InExpression = mre.TargetObject;
+				fromClause.Expression = mre.Target;
 				//doc["@metadata"]["Raven-Entity-Name"]
 				var metadata = new IndexerExpression(
-					new IndexerExpression(new IdentifierExpression(queryExpression.FromClause.Identifier), new List<Expression> { new PrimitiveExpression("@metadata", "@metadata") }),
-					new List<Expression> { new PrimitiveExpression("Raven-Entity-Name", "Raven-Entity-Name") }
+					new IndexerExpression(new IdentifierExpression(fromClause.Identifier), new List<Expression> { new StringLiteralExpression("@metadata") }),
+					new List<Expression> { new StringLiteralExpression(Constants.RavenEntityName) }
 					);
-				queryExpression.MiddleClauses.Insert(0, 
-				                                     new QueryExpressionWhereClause
-				                                     {
-				                                     	Condition = 
-				                                     		new BinaryOperatorExpression(
-				                                     		metadata,
-				                                     		BinaryOperatorType.Equality,
-				                                     		new PrimitiveExpression(mre.MemberName, mre.MemberName)
-				                                     		)
-				                                     });
+
+				// string.Equals(doc["@metadata"]["Raven-Entity-Name"], "Blogs", StringComparison.InvariantCultureIgnoreCase)
+				var binaryOperatorExpression =
+					new InvocationExpression(
+						new MemberReferenceExpression(new TypeReferenceExpression(new PrimitiveType("string")), "Equals"),
+						new List<Expression>
+						{
+							metadata,
+							new StringLiteralExpression(mre.MemberName),
+							new MemberReferenceExpression(new TypeReferenceExpression(new SimpleType(typeof(StringComparison).FullName)),"InvariantCultureIgnoreCase")
+						});
+
+				queryExpression.Clauses.InsertAfter(fromClause,
+													 new QueryWhereClause
+													 {
+														 Condition = binaryOperatorExpression
+													 });
 			}
-			var selectOrGroupClause = queryExpression.SelectOrGroupClause;
-			var projection = ((QueryExpressionSelectClause) selectOrGroupClause).Projection;
-            if(projection is ObjectCreateExpression == false)
-                return variableDeclaration;
+			var projection = 
+				QueryParsingUtils.GetAnonymousCreateExpression(
+					queryExpression.Clauses.OfType<QuerySelectClause>().First().Expression);
 
-			var objectInitializer = ((ObjectCreateExpression) projection).ObjectInitializer;
+			var anonymousTypeCreateExpression = projection as AnonymousTypeCreateExpression;
 
-			var identifierExpression = new IdentifierExpression(queryExpression.FromClause.Identifier);
-			objectInitializer.CreateExpressions.Add(
-				new NamedArgumentExpression
+			if (anonymousTypeCreateExpression == null)
+				return variableDeclaration;
+
+			var objectInitializer = anonymousTypeCreateExpression.Initializers;
+
+			var identifierExpression = new IdentifierExpression(fromClause.Identifier);
+
+			if (objectInitializer.OfType<NamedExpression>().Any(x => x.Name == Constants.DocumentIdFieldName))
+				return variableDeclaration;
+
+			objectInitializer.Add(
+				new NamedExpression
 				{
-					Name = "__document_id",
-					Expression = new MemberReferenceExpression(identifierExpression, "__document_id")
+					Name = Constants.DocumentIdFieldName,
+					Expression = new MemberReferenceExpression(identifierExpression, Constants.DocumentIdFieldName)
 				});
 			return variableDeclaration;
 		}
@@ -349,28 +554,13 @@ namespace Raven.Database.Linq
 		public AbstractViewGenerator GenerateInstance()
 		{
 			TransformQueryToClass();
-			string tempFileName = null;
-			try
-			{
-				try
-				{
-					tempFileName = Path.GetTempFileName();
-					File.WriteAllText(tempFileName, CompiledQueryText);
-				}
-				catch (Exception)
-				{
-					throw new InvalidOperationException(@"Raven could not write to the temp directory.
-This is usually the result of security settings when running in IIS.
-Raven requiers access to the temp directory in order to compile indexes.");
-				}
-				GeneratedType = QueryParsingUtils.Compile(tempFileName, CSharpSafeName, CompiledQueryText, extensions);
-			}
-			finally
-			{
-				if (tempFileName != null)
-					File.Delete(tempFileName);
-			}
-			return (AbstractViewGenerator) Activator.CreateInstance(GeneratedType);
+
+			GeneratedType = QueryParsingUtils.Compile(CompiledQueryText, CSharpSafeName, CompiledQueryText, extensions, basePath);
+
+			var abstractViewGenerator = (AbstractViewGenerator)Activator.CreateInstance(GeneratedType);
+			abstractViewGenerator.SourceCode = CompiledQueryText;
+			abstractViewGenerator.Init(indexDefinition);
+			return abstractViewGenerator;
 		}
 	}
 }

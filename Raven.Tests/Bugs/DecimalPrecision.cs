@@ -1,11 +1,17 @@
+//-----------------------------------------------------------------------
+// <copyright file="DecimalPrecision.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
+using Raven.Abstractions.Indexing;
 using Raven.Database.Indexing;
 using Xunit;
 using System.Linq;
 
 namespace Raven.Tests.Bugs
 {
-	public class DecimalPrecision : LocalClientTest
+	public class DecimalPrecision : RavenTest
 	{
 		[Fact]
 		public void CanDetectHighPrecision_Decimal()

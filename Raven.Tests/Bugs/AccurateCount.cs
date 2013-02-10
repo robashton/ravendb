@@ -1,10 +1,16 @@
+//-----------------------------------------------------------------------
+// <copyright file="AccurateCount.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+using Raven.Abstractions.Indexing;
 using Raven.Database.Indexing;
 using Xunit;
 using System.Linq;
 
 namespace Raven.Tests.Bugs
 {
-	public class AccurateCount : LocalClientTest
+	public class AccurateCount : RavenTest
 	{
 		[Fact]
 		public void QueryableCountIsAccurate()
@@ -26,6 +32,8 @@ namespace Raven.Tests.Bugs
 					}
 					s.SaveChanges();
 				}
+
+				WaitForUserToContinueTheTest(store);
 
 				// wait for index
 				using (var s = store.OpenSession())

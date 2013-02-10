@@ -1,46 +1,19 @@
+//-----------------------------------------------------------------------
+// <copyright file="TagCloud.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Reflection;
-using Raven.Client.Client;
-using Raven.Client.Document;
-using Raven.Database.Extensions;
-using Raven.Database.Indexing;
+using Raven.Abstractions;
+using Raven.Abstractions.Indexing;
 using Xunit;
 using System.Linq;
 
 namespace Raven.Tests.Document
 {
-	public class TagCloud : RemoteClientTest, IDisposable
+	public class TagCloud : RemoteClientTest
 	{
-		private string path;
-
-		#region IDisposable Members
-
-		public void Dispose()
-		{
-            IOExtensions.DeleteDirectory(path);
-		}
-
-		#endregion
-
-
-		private DocumentStore NewDocumentStore()
-		{
-			path = Path.GetDirectoryName(Assembly.GetAssembly(typeof(DocumentStoreServerTests)).CodeBase);
-			path = Path.Combine(path, "TestDb").Substring(6);
-            var documentStore = new EmbeddableDocumentStore
-			{
-				Configuration =
-					{
-						RunInUnreliableYetFastModeThatIsNotSuitableForProduction =true,
-						DataDirectory = path
-					}
-			};
-			documentStore.Initialize();
-			return documentStore;
-		}
-
 		[Fact]
 		public void CanQueryMapReduceIndex()
 		{
@@ -60,24 +33,24 @@ select new { Tag, Count = 1 }",
 from result in results
 group result by result.Tag into g
 select new { Tag = g.Key, Count = g.Sum(x => (long)x.Count) }",
-                                                              Indexes = {{"Tag", FieldIndexing.NotAnalyzed}}
+															  Indexes = {{"Tag", FieldIndexing.NotAnalyzed}}
 				                                });
 
 				using(var session = store.OpenSession())
 				{
 					session.Store(new Post
 					{
-						PostedAt = DateTime.Now,
+						PostedAt = SystemTime.UtcNow,
 						Tags = new List<string>{"C#", "Programming","NoSql"}
 					});
 					session.Store(new Post
 					{
-						PostedAt = DateTime.Now,
+						PostedAt = SystemTime.UtcNow,
 						Tags = new List<string> { "Database", "NoSql" }
 					});
 					session.SaveChanges();
 
-                    var tagAndCounts = session.Advanced.LuceneQuery<TagAndCount>("TagCloud").WaitForNonStaleResults()
+					var tagAndCounts = session.Advanced.LuceneQuery<TagAndCount>("TagCloud").WaitForNonStaleResults()
 						.ToArray();
 
 					Assert.Equal(1, tagAndCounts.First(x=>x.Tag == "C#").Count);
@@ -107,7 +80,7 @@ select new { Tag = g.Key, Count = g.Sum(x => (long)x.Count) }",
 
 				using (var session = store.OpenSession())
 				{
-					var posts = session.Query<Post>("Raven/DocumentsByEntityName")
+					var posts = session.Query<Post>()
 						.Customize(q => q.WaitForNonStaleResultsAsOfNow(TimeSpan.FromSeconds(5)))
 						.ToArray();
 
@@ -120,13 +93,13 @@ select new { Tag = g.Key, Count = g.Sum(x => (long)x.Count) }",
 		[Fact]
 		public void CanStoreAndRetrieveTimeLocal()
 		{
-			CanStoreAndRetrieveTime(DateTime.Now);
+			CanStoreAndRetrieveTime(SystemTime.UtcNow);
 		}
 
 		[Fact]
 		public void CanStoreAndRetrieveTimeUtc()
 		{
-			CanStoreAndRetrieveTime(DateTime.UtcNow);
+			CanStoreAndRetrieveTime(SystemTime.UtcNow);
 		}
 
 		[Fact]
@@ -148,24 +121,24 @@ select new { Tag, Count = 1 }",
 from result in results
 group result by result.Tag into g
 select new { Tag = g.Key, Count = g.Sum(x => (long)x.Count) }",
-                                                    Indexes = {{"Tag", FieldIndexing.NotAnalyzed}}
+													Indexes = {{"Tag", FieldIndexing.NotAnalyzed}}
 												});
 
 				using (var session = store.OpenSession())
 				{
 					session.Store(new Post
 					{
-						PostedAt = DateTime.Now,
+						PostedAt = SystemTime.UtcNow,
 						Tags = new List<string> { "C#", "Programming", "NoSql" }
 					});
 					session.Store(new Post
 					{
-						PostedAt = DateTime.Now,
+						PostedAt = SystemTime.UtcNow,
 						Tags = new List<string> { "Database", "NoSql" }
 					});
 					session.SaveChanges();
 
-                    var tagAndCounts = session.Advanced.LuceneQuery<TagAndCount>("TagCloud").WaitForNonStaleResults()
+					var tagAndCounts = session.Advanced.LuceneQuery<TagAndCount>("TagCloud").WaitForNonStaleResults()
 					.ToArray();
 
 					Assert.Equal(1, tagAndCounts.Single(x => x.Tag == "C#").Count);
@@ -175,17 +148,17 @@ select new { Tag = g.Key, Count = g.Sum(x => (long)x.Count) }",
 		
 					session.Store(new Post
 					{
-						PostedAt = DateTime.Now,
+						PostedAt = SystemTime.UtcNow,
 						Tags = new List<string> { "C#", "Programming", "NoSql" }
 					});
 					session.Store(new Post
 					{
-						PostedAt = DateTime.Now,
+						PostedAt = SystemTime.UtcNow,
 						Tags = new List<string> { "Database", "NoSql" }
 					});
 					session.SaveChanges();
 
-                    tagAndCounts = session.Advanced.LuceneQuery<TagAndCount>("TagCloud").WaitForNonStaleResults()
+					tagAndCounts = session.Advanced.LuceneQuery<TagAndCount>("TagCloud").WaitForNonStaleResults()
 						.ToArray();
 
 					Assert.Equal(2, tagAndCounts.Single(x => x.Tag == "C#").Count);
@@ -216,16 +189,16 @@ select new {
 from result in results
 group result by new { result.Activity, result.Character } into g 
 select new
-        {
-            Activity = g.Key.Activity,
-            Character =  g.Key.Character,
-            Amount = g.Sum(x=>(long)x.Amount)
-        }",
-                       Indexes =
-                           {
-                               { "Activity", FieldIndexing.NotAnalyzed },
-                               { "Character", FieldIndexing.NotAnalyzed },
-                           }
+		{
+			Activity = g.Key.Activity,
+			Character =  g.Key.Character,
+			Amount = g.Sum(x=>(long)x.Amount)
+		}",
+					   Indexes =
+						   {
+							   { "Activity", FieldIndexing.NotAnalyzed },
+							   { "Character", FieldIndexing.NotAnalyzed },
+						   }
 				   });
 
 				using (var session = store.OpenSession())
@@ -250,7 +223,7 @@ select new
 					});
 					session.SaveChanges();
 
-                    var tagAndCounts = session.Advanced.LuceneQuery<ActivityAndCharacterCountAmount>("EventsByActivityAndCharacterCountAmount")
+					var tagAndCounts = session.Advanced.LuceneQuery<ActivityAndCharacterCountAmount>("EventsByActivityAndCharacterCountAmount")
 						.WaitForNonStaleResults(TimeSpan.FromHours(1))
 						.ToArray();
 

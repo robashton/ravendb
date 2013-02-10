@@ -1,4 +1,9 @@
-﻿using System;
+//-----------------------------------------------------------------------
+// <copyright file="ITasksStorageActions.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+using System;
 using Raven.Database.Tasks;
 
 namespace Raven.Database.Storage
@@ -8,6 +13,6 @@ namespace Raven.Database.Storage
 		void AddTask(Task task, DateTime addedAt);
 		bool HasTasks { get; }
 		long ApproximateTaskCount { get; }
-		Task GetMergedTask(out int countOfMergedTasks);
+		T GetMergedTask<T>() where T : Task;
 	}
 }

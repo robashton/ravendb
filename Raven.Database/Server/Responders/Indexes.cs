@@ -1,10 +1,15 @@
-using Newtonsoft.Json.Linq;
-using Raven.Http.Abstractions;
-using Raven.Http.Extensions;
+//-----------------------------------------------------------------------
+// <copyright file="Indexes.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+using Raven.Database.Extensions;
+using Raven.Database.Server.Abstractions;
+using Raven.Json.Linq;
 
 namespace Raven.Database.Server.Responders
 {
-	public class Indexes : RequestResponder
+	public class Indexes : AbstractRequestResponder
 	{
 		public override string UrlPattern
 		{
@@ -20,7 +25,7 @@ namespace Raven.Database.Server.Responders
 		{
 			var namesOnlyString = context.Request.QueryString["namesOnly"];
 			bool namesOnly;
-			JArray indexes;
+			RavenJArray indexes;
 			if(bool.TryParse(namesOnlyString, out namesOnly) && namesOnly)
 				indexes = Database.GetIndexNames(context.GetStart(), context.GetPageSize(Database.Configuration.MaxPageSize));
 			else

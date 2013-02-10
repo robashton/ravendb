@@ -1,8 +1,13 @@
+//-----------------------------------------------------------------------
+// <copyright file="SinglePropertyDocument.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using Xunit;
 
 namespace Raven.Tests.Bugs
 {
-	public class SinglePropertyDocument : LocalClientTest
+	public class SinglePropertyDocument : RavenTest
 	{
 		[Fact]
 		public void CanSaveDocumentWithJustId()

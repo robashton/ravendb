@@ -1,11 +1,17 @@
+//-----------------------------------------------------------------------
+// <copyright file="LinqGitHub147.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System.Collections.Generic;
 using System.Linq;
+using Raven.Abstractions.Indexing;
 using Raven.Database.Indexing;
 using Xunit;
 
 namespace Raven.Tests.Bugs
 {
-	public class LinqGitHub147 : LocalClientTest
+	public class LinqGitHub147 : RavenTest
 	{
 		public class Order
 		{

@@ -1,9 +1,14 @@
+//-----------------------------------------------------------------------
+// <copyright file="Etag.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using Xunit;
 
 namespace Raven.Tests.Bugs
 {
-	public class Etag : LocalClientTest
+	public class Etag : RavenTest
 	{
 		[Fact]
 		public void WhenSaving_ThenGetsEtag()
@@ -18,7 +23,7 @@ namespace Raven.Tests.Bugs
 
 					session.SaveChanges();
 
-                    var metadata = session.Advanced.GetMetadataFor(foo);
+					var metadata = session.Advanced.GetMetadataFor(foo);
 					Assert.NotNull(metadata.Value<string>("@etag"));
 				}
 
@@ -26,7 +31,7 @@ namespace Raven.Tests.Bugs
 				{
 					var loaded = session.Load<IndexWithTwoProperties.Foo>(foo.Id);
 
-                    var metadata = session.Advanced.GetMetadataFor(loaded);
+					var metadata = session.Advanced.GetMetadataFor(loaded);
 					Assert.NotNull(metadata.Value<string>("@etag"));
 
 				}

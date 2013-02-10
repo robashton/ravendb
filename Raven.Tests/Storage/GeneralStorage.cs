@@ -1,5 +1,17 @@
+//-----------------------------------------------------------------------
+// <copyright file="GeneralStorage.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
-using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
+using System.Threading;
+using Raven.Client.Embedded;
+using Raven.Imports.Newtonsoft.Json.Linq;
+using Raven.Abstractions;
+using Raven.Abstractions.Commands;
+using Raven.Abstractions.Data;
+using Raven.Json.Linq;
 using Raven.Database;
 using Raven.Database.Config;
 using Raven.Database.Tasks;
@@ -10,118 +22,140 @@ using System.Linq;
 
 namespace Raven.Tests.Storage
 {
-	public class GeneralStorage : AbstractDocumentStorageTest
+	public class GeneralStorage : RavenTest
 	{
+		private readonly EmbeddableDocumentStore store;
 		private readonly DocumentDatabase db;
 
 		public GeneralStorage()
 		{
-			db = new DocumentDatabase(new RavenConfiguration
-			{
-				DataDirectory = "raven.db.test.esent",
-			});
+			store = NewDocumentStore();
+			db = store.DocumentDatabase;
 		}
 
 		public override void Dispose()
 		{
-			db.Dispose();
+			store.Dispose();
 			base.Dispose();
 		}
 
-        [Fact]
-        public void CanProperlyHandleDeletingThreeItemsBothFromPK_And_SecondaryIndexes()
-        {
-            var cmds = new[]
-            {
-                @"{""Cmd"":""Put"",""Key"":{""index"":""Raven/DocumentsByEntityName"",""id"":""AAAAAAAAAAEAAAAAAAAABQ=="",""time"":""\/Date(1290420997504)\/"",""type"":""Raven.Database.Tasks.RemoveFromIndexTask"",""mergable"":true},""TableId"":9,""TxId"":""NiAAMOT72EC/We7rnZS/Fw==""}"
-                ,
-                @"{""Cmd"":""Put"",""Key"":{""index"":""Raven/DocumentsByEntityName"",""id"":""AAAAAAAAAAEAAAAAAAAABg=="",""time"":""\/Date(1290420997509)\/"",""type"":""Raven.Database.Tasks.RemoveFromIndexTask"",""mergable"":true},""TableId"":9,""TxId"":""NiAAMOT72EC/We7rnZS/Fw==""}"
-                ,
-                @"{""Cmd"":""Put"",""Key"":{""index"":""Raven/DocumentsByEntityName"",""id"":""AAAAAAAAAAEAAAAAAAAABw=="",""time"":""\/Date(1290420997509)\/"",""type"":""Raven.Database.Tasks.RemoveFromIndexTask"",""mergable"":true},""TableId"":9,""TxId"":""NiAAMOT72EC/We7rnZS/Fw==""}"
-                ,
-                @"{""Cmd"":""Commit"",""TableId"":9,""TxId"":""NiAAMOT72EC/We7rnZS/Fw==""}",
-                @"{""Cmd"":""Del"",""Key"":{""index"":""Raven/DocumentsByEntityName"",""id"":""AAAAAAAAAAEAAAAAAAAABg=="",""time"":""\/Date(1290420997509)\/"",""type"":""Raven.Database.Tasks.RemoveFromIndexTask"",""mergable"":true},""TableId"":9,""TxId"":""wM3q3VA0XkWecl5WBr9Cfw==""}"
-                ,
-                @"{""Cmd"":""Del"",""Key"":{""index"":""Raven/DocumentsByEntityName"",""id"":""AAAAAAAAAAEAAAAAAAAABw=="",""time"":""\/Date(1290420997509)\/"",""type"":""Raven.Database.Tasks.RemoveFromIndexTask"",""mergable"":true},""TableId"":9,""TxId"":""wM3q3VA0XkWecl5WBr9Cfw==""}"
-                ,
-                @"{""Cmd"":""Del"",""Key"":{""index"":""Raven/DocumentsByEntityName"",""id"":""AAAAAAAAAAEAAAAAAAAABQ=="",""time"":""\/Date(1290420997504)\/"",""type"":""Raven.Database.Tasks.RemoveFromIndexTask"",""mergable"":true},""TableId"":9,""TxId"":""wM3q3VA0XkWecl5WBr9Cfw==""}"
-                ,
-                @"{""Cmd"":""Commit"",""TableId"":9,""TxId"":""wM3q3VA0XkWecl5WBr9Cfw==""}",
-            };
+		[Fact]
+		public void Can_query_by_id_prefix()
+		{
+			db.Put("abc", null, new RavenJObject { { "a", "b" } }, new RavenJObject(), null);
+			db.Put("Raven/Databases/Hello", null, new RavenJObject {{"a", "b"}}, new RavenJObject(), null);
+			db.Put("Raven/Databases/Northwind", null, new RavenJObject { { "a", "b" } }, new RavenJObject(), null);
+			db.Put("Raven/Databases/Sys", null, new RavenJObject { { "a", "b" } }, new RavenJObject(), null);
+			db.Put("Raven/Databases/Db", null, new RavenJObject { { "a", "b" } }, new RavenJObject(), null);
+			db.Put("Raven/Database", null, new RavenJObject { { "a", "b" } }, new RavenJObject(), null);
 
-            var tableStorage = new TableStorage(new MemoryPersistentSource());
+			var dbs = db.GetDocumentsWithIdStartingWith("Raven/Databases/",null, 0, 10);
 
-            foreach (var cmdText in cmds)
-            {
-                var command = JObject.Parse(cmdText);
-                var tblId = command.Value<int>("TableId");
+			Assert.Equal(4, dbs.Length);
+		}
 
-                var table = tableStorage.Tables[tblId];
+		[Fact]
+		public void WhenPutAnIdWithASpace_IdWillBeAGuid()
+		{
+			db.Put(" ", null, new RavenJObject { { "a", "b" } }, new RavenJObject(), null);
 
-                var txId = new Guid(Convert.FromBase64String(command.Value<string>("TxId")));
+			var doc = db.GetDocuments(0, 10, null)
+				.OfType<RavenJObject>()
+				.Single();
+			var id = doc["@metadata"].Value<string>("@id");
+			Assert.False(string.IsNullOrWhiteSpace(id));
+			Assert.DoesNotThrow(() => new Guid(id)); 
+		}
 
-                var key = command["Key"] as JObject;
-                if (key != null)
-                {
-                    foreach (var property in key.Properties())
-                    {
-                        if(property.Value.Type != JTokenType.String)
-                            continue;
-                        var value = property.Value.Value<string>();
-                        if (value.EndsWith("==") == false)
-                            continue;
+		[Fact]
+		public void CanProperlyHandleDeletingThreeItemsBothFromPK_And_SecondaryIndexes()
+		{
+			var cmds = new[]
+			{
+				@"{""Cmd"":""Put"",""Key"":{""index"":""Raven/DocumentsByEntityName"",""id"":""AAAAAAAAAAEAAAAAAAAABQ=="",""time"":""\/Date(1290420997504)\/"",""type"":""Raven.Database.Tasks.RemoveFromIndexTask"",""mergeable"":true},""TableId"":9,""TxId"":""NiAAMOT72EC/We7rnZS/Fw==""}"
+				,
+				@"{""Cmd"":""Put"",""Key"":{""index"":""Raven/DocumentsByEntityName"",""id"":""AAAAAAAAAAEAAAAAAAAABg=="",""time"":""\/Date(1290420997509)\/"",""type"":""Raven.Database.Tasks.RemoveFromIndexTask"",""mergeable"":true},""TableId"":9,""TxId"":""NiAAMOT72EC/We7rnZS/Fw==""}"
+				,
+				@"{""Cmd"":""Put"",""Key"":{""index"":""Raven/DocumentsByEntityName"",""id"":""AAAAAAAAAAEAAAAAAAAABw=="",""time"":""\/Date(1290420997509)\/"",""type"":""Raven.Database.Tasks.RemoveFromIndexTask"",""mergeable"":true},""TableId"":9,""TxId"":""NiAAMOT72EC/We7rnZS/Fw==""}"
+				,
+				@"{""Cmd"":""Commit"",""TableId"":9,""TxId"":""NiAAMOT72EC/We7rnZS/Fw==""}",
+				@"{""Cmd"":""Del"",""Key"":{""index"":""Raven/DocumentsByEntityName"",""id"":""AAAAAAAAAAEAAAAAAAAABg=="",""time"":""\/Date(1290420997509)\/"",""type"":""Raven.Database.Tasks.RemoveFromIndexTask"",""mergeable"":true},""TableId"":9,""TxId"":""wM3q3VA0XkWecl5WBr9Cfw==""}"
+				,
+				@"{""Cmd"":""Del"",""Key"":{""index"":""Raven/DocumentsByEntityName"",""id"":""AAAAAAAAAAEAAAAAAAAABw=="",""time"":""\/Date(1290420997509)\/"",""type"":""Raven.Database.Tasks.RemoveFromIndexTask"",""mergeable"":true},""TableId"":9,""TxId"":""wM3q3VA0XkWecl5WBr9Cfw==""}"
+				,
+				@"{""Cmd"":""Del"",""Key"":{""index"":""Raven/DocumentsByEntityName"",""id"":""AAAAAAAAAAEAAAAAAAAABQ=="",""time"":""\/Date(1290420997504)\/"",""type"":""Raven.Database.Tasks.RemoveFromIndexTask"",""mergeable"":true},""TableId"":9,""TxId"":""wM3q3VA0XkWecl5WBr9Cfw==""}"
+				,
+				@"{""Cmd"":""Commit"",""TableId"":9,""TxId"":""wM3q3VA0XkWecl5WBr9Cfw==""}",
+			};
 
-                        key[property.Name] = Convert.FromBase64String(value);
-                    }
-                }
+			var tableStorage = new TableStorage(new MemoryPersistentSource());
 
-                switch (command.Value<string>("Cmd"))
-                {
-                    case "Put":
-                        table.Put(command["Key"], new byte[] {1, 2, 3}, txId);
-                        break;
-                    case "Del":
-                        table.Remove(command["Key"], txId);
-                        break;
-                    case "Commit":
-                        table.CompleteCommit(txId);
-                        break;
-                }
-            }
+			foreach (var cmdText in cmds)
+			{
+				var command = RavenJObject.Parse(cmdText);
+				var tblId = command.Value<int>("TableId");
 
-            Assert.Empty(tableStorage.Tasks);
-            Assert.Null(tableStorage.Tasks["ByIndexAndTime"].LastOrDefault());
-        }
+				var table = tableStorage.Tables[tblId];
+
+				var txId = new Guid(Convert.FromBase64String(command.Value<string>("TxId")));
+
+				var key = command["Key"] as RavenJObject;
+				if (key != null)
+				{
+					foreach (var property in key.ToArray())// nothing in .NET supports iterating & modifying at the same time, no news here
+					{
+						if(property.Value.Type != JTokenType.String)
+							continue;
+						var value = property.Value.Value<string>();
+						if (value.EndsWith("==") == false)
+							continue;
+
+						key[property.Key] = Convert.FromBase64String(value);
+					}
+				}
+
+				switch (command.Value<string>("Cmd"))
+				{
+					case "Put":
+						table.Put(command["Key"], new byte[] {1, 2, 3}, txId);
+						break;
+					case "Del":
+						table.Remove(command["Key"], txId);
+						break;
+					case "Commit":
+						table.CompleteCommit(txId);
+						break;
+				}
+			}
+
+			Assert.Empty(tableStorage.Tasks);
+			Assert.Null(tableStorage.Tasks["ByIndexAndTime"].LastOrDefault());
+		}
 
 	    [Fact]
-        public void CanAddAndRemoveMultipleTasks_InSingleTx()
-        {
-            db.TransactionalStorage.Batch(actions=>
-            {
-                for (int i = 0; i < 3; i++)
-                {
-                    actions.Tasks.AddTask(new RemoveFromIndexTask
-                    {
-                        Index = "foo",
-                        Keys = new[] { "tasks/"+i },
-                    },DateTime.Now);
-                }
-            });
+		public void CanAddAndRemoveMultipleTasks_InSingleTx()
+		{
+			db.TransactionalStorage.Batch(actions=>
+			{
+				for (int i = 0; i < 3; i++)
+				{
+					actions.Tasks.AddTask(new RemoveFromIndexTask
+					{
+						Index = "foo",
+						Keys = { "tasks/"+i },
+					},SystemTime.UtcNow);
+				}
+			});
 
-            db.TransactionalStorage.Batch(actions =>
-            {
-                int tasks;
-                actions.Tasks.GetMergedTask(out tasks);
-                Assert.Equal(3, tasks);
-            });
+			db.TransactionalStorage.Batch(actions => actions.Tasks.GetMergedTask<RemoveFromIndexTask>());
 
 
-            db.TransactionalStorage.Batch(actions =>
-            {
-                var isIndexStale = actions.Staleness.IsIndexStale("foo", null, null);
-                Assert.False(isIndexStale);
-            });
-        }
+			db.TransactionalStorage.Batch(actions =>
+			{
+				var isIndexStale = actions.Staleness.IsIndexStale("foo", null, null);
+				Assert.False(isIndexStale);
+			});
+		}
 
 		[Fact]
 		public void CanGetDocumentCounts()
@@ -130,80 +164,142 @@ namespace Raven.Tests.Storage
 			{
 				Assert.Equal(0, actions.Documents.GetDocumentsCount());
 
-				actions.Documents.AddDocument("a", null, new JObject(), new JObject());
+				actions.Documents.AddDocument("a", null, new RavenJObject(), new RavenJObject());
 			});
 
 			db.TransactionalStorage.Batch(actions =>
 			{
 				Assert.Equal(1, actions.Documents.GetDocumentsCount());
 
-				JObject metadata;
-				actions.Documents.DeleteDocument("a", null, out metadata);
+				RavenJObject metadata;
+				Guid? tag;
+				actions.Documents.DeleteDocument("a", null, out metadata, out tag);
 			});
 
 
 			db.TransactionalStorage.Batch(actions => Assert.Equal(0, actions.Documents.GetDocumentsCount()));
 		}
 
-        [Fact]
-        public void CanGetDocumentAfterEmptyEtag()
-        {
-            db.TransactionalStorage.Batch(actions => actions.Documents.AddDocument("a", null, new JObject(), new JObject()));
+		[Fact]
+		public void CanGetDocumentAfterEmptyEtag()
+		{
+			db.TransactionalStorage.Batch(actions => actions.Documents.AddDocument("a", null, new RavenJObject(), new RavenJObject()));
 
-            db.TransactionalStorage.Batch(actions =>
-            {
-                var documents = actions.Documents.GetDocumentsAfter(Guid.Empty).ToArray();
-                Assert.Equal(1, documents.Length);
-            });
-        }
+			db.TransactionalStorage.Batch(actions =>
+			{
+				var documents = actions.Documents.GetDocumentsAfter(Guid.Empty,5).ToArray();
+				Assert.Equal(1, documents.Length);
+			});
+		}
 
-        [Fact]
-        public void CanGetDocumentAfterAnEtag()
-        {
-            db.TransactionalStorage.Batch(actions =>
-            {
-                actions.Documents.AddDocument("a", null, new JObject(), new JObject());
-                actions.Documents.AddDocument("b", null, new JObject(), new JObject());
-                actions.Documents.AddDocument("c", null, new JObject(), new JObject());
-            });
+		[Fact]
+		public void CanGetDocumentAfterAnEtag()
+		{
+			db.TransactionalStorage.Batch(actions =>
+			{
+				actions.Documents.AddDocument("a", null, new RavenJObject(), new RavenJObject());
+				actions.Documents.AddDocument("b", null, new RavenJObject(), new RavenJObject());
+				actions.Documents.AddDocument("c", null, new RavenJObject(), new RavenJObject());
+			});
 
-            db.TransactionalStorage.Batch(actions =>
-            {
-                var doc = actions.Documents.DocumentByKey("a",null);
-                var documents = actions.Documents.GetDocumentsAfter(doc.Etag).Select(x => x.Key).ToArray();
-                Assert.Equal(2, documents.Length);
-                Assert.Equal("b", documents[0]);
-                Assert.Equal("c", documents[1]);
-            });
-        }
+			db.TransactionalStorage.Batch(actions =>
+			{
+				var doc = actions.Documents.DocumentByKey("a",null);
+				var documents = actions.Documents.GetDocumentsAfter(doc.Etag.Value, 5).Select(x => x.Key).ToArray();
+				Assert.Equal(2, documents.Length);
+				Assert.Equal("b", documents[0]);
+				Assert.Equal("c", documents[1]);
+			});
+		}
 
-        [Fact]
-        public void CanGetDocumentAfterAnEtagAfterDocumentUpdateWouldReturnThatDocument()
-        {
-            db.TransactionalStorage.Batch(actions =>
-            {
-                actions.Documents.AddDocument("a", null, new JObject(), new JObject());
-                actions.Documents.AddDocument("b", null, new JObject(), new JObject());
-                actions.Documents.AddDocument("c", null, new JObject(), new JObject());
-            });
+		[Fact]
+		public void CanGetDocumentAfterAnEtagAfterDocumentUpdateWouldReturnThatDocument()
+		{
+			db.TransactionalStorage.Batch(actions =>
+			{
+				actions.Documents.AddDocument("a", null, new RavenJObject(), new RavenJObject());
+				actions.Documents.AddDocument("b", null, new RavenJObject(), new RavenJObject());
+				actions.Documents.AddDocument("c", null, new RavenJObject(), new RavenJObject());
+			});
 
-            Guid guid = Guid.Empty;
-            db.TransactionalStorage.Batch(actions =>
-            {
-                var doc = actions.Documents.DocumentByKey("a", null);
-                guid = doc.Etag;
-                actions.Documents.AddDocument("a", null, new JObject(), new JObject());
-            });
+			Guid guid = Guid.Empty;
+			db.TransactionalStorage.Batch(actions =>
+			{
+				var doc = actions.Documents.DocumentByKey("a", null);
+				guid = doc.Etag.Value;
+				actions.Documents.AddDocument("a", null, new RavenJObject(), new RavenJObject());
+			});
 
-            db.TransactionalStorage.Batch(actions =>
-            {
-                var documents = actions.Documents.GetDocumentsAfter(guid).Select(x => x.Key).ToArray();
-                Assert.Equal(3, documents.Length);
-                Assert.Equal("b", documents[0]);
-                Assert.Equal("c", documents[1]);
-                Assert.Equal("a", documents[2]);
-            });
-        }
+			db.TransactionalStorage.Batch(actions =>
+			{
+				var documents = actions.Documents.GetDocumentsAfter(guid, 5).Select(x => x.Key).ToArray();
+				Assert.Equal(3, documents.Length);
+				Assert.Equal("b", documents[0]);
+				Assert.Equal("c", documents[1]);
+				Assert.Equal("a", documents[2]);
+			});
+		}
+
+		[Fact]
+		public void GetDocumentAfterAnEtagWhileAddingDocsFromMultipleThreadsEnumeratesAllDocs()
+		{
+			var numberOfDocsAdded = 0;
+			var threads = new List<Thread>();
+			try
+			{
+				for (var i = 0; i < 10; i++)
+				{
+					var thread = new Thread(() =>
+					{
+						var cmds = new List<ICommandData>();
+						 for (var k = 0; k < 100; k++)
+						 {
+							var newId = Interlocked.Increment(ref numberOfDocsAdded);
+							cmds.Add(new PutCommandData
+							{
+								Document = new RavenJObject(),
+								Metadata = new RavenJObject(),
+								Key = newId.ToString()
+							});
+						};
+						db.Batch(cmds);
+					});
+					threads.Add(thread);
+					thread.Start();
+				}
+
+				var docs = new List<string>();
+				var lastEtag = Guid.Empty;
+				var total = 0;
+			    var stop = false;
+			    do
+			    {
+					var etag = lastEtag;
+			        var jsonDocuments = new JsonDocument[0];
+			        db.TransactionalStorage.Batch(actions =>
+			        {
+						jsonDocuments = actions.Documents.GetDocumentsAfter(etag, 1000).Where(x => x != null).ToArray();
+			        });
+					docs.AddRange(jsonDocuments.Select(x=>x.Key));
+			        total += jsonDocuments.Length;
+			    	if (jsonDocuments.Length > 0)
+			    		lastEtag = jsonDocuments.Last().Etag.Value;
+			    	if (stop)
+						break;
+					if (threads.All(x => !x.IsAlive))
+						stop = true;
+			    } while (true);
+
+				Assert.Equal(numberOfDocsAdded, total);
+			}
+			finally
+			{
+				foreach (var thread in threads)
+				{
+					thread.Join();
+				}
+			}
+		}
 
 		[Fact]
 		public void UpdatingDocumentWillKeepSameCount()
@@ -212,7 +308,7 @@ namespace Raven.Tests.Storage
 			{
 				Assert.Equal(0, actions.Documents.GetDocumentsCount());
 
-				actions.Documents.AddDocument("a", null, new JObject(), new JObject());
+				actions.Documents.AddDocument("a", null, new RavenJObject(), new RavenJObject());
 
 			});
 
@@ -220,7 +316,7 @@ namespace Raven.Tests.Storage
 			{
 				Assert.Equal(1, actions.Documents.GetDocumentsCount());
 
-				actions.Documents.AddDocument("a", null, new JObject(), new JObject());
+				actions.Documents.AddDocument("a", null, new RavenJObject(), new RavenJObject());
 			});
 
 
@@ -228,40 +324,41 @@ namespace Raven.Tests.Storage
 		}
 
 
-        [Fact]
-        public void CanEnqueueAndPeek()
-        {
-            db.TransactionalStorage.Batch(actions => actions.Queue.EnqueueToQueue("ayende", new byte[]{1,2}));
 
-            db.TransactionalStorage.Batch(actions => Assert.Equal(new byte[] { 1, 2 }, actions.Queue.PeekFromQueue("ayende").First().Item1));
-        }
+		[Fact]
+		public void CanEnqueueAndPeek()
+		{
+			db.TransactionalStorage.Batch(actions => actions.Queue.EnqueueToQueue("ayende", new byte[]{1,2}));
 
-        [Fact]
-        public void PoisonMessagesWillBeDeleted()
-        {
-            db.TransactionalStorage.Batch(actions => actions.Queue.EnqueueToQueue("ayende", new byte[] { 1, 2 }));
+			db.TransactionalStorage.Batch(actions => Assert.Equal(new byte[] { 1, 2 }, actions.Queue.PeekFromQueue("ayende").First().Item1));
+		}
 
-            db.TransactionalStorage.Batch(actions =>
-            {
-                for (int i = 0; i < 6; i++)
-                {
-                    actions.Queue.PeekFromQueue("ayende").First();
-                }
-                Assert.Equal(null, actions.Queue.PeekFromQueue("ayende").FirstOrDefault());
-            });
-        }
+		[Fact]
+		public void PoisonMessagesWillBeDeleted()
+		{
+			db.TransactionalStorage.Batch(actions => actions.Queue.EnqueueToQueue("ayende", new byte[] { 1, 2 }));
 
-        [Fact]
-        public void CanDeleteQueuedData()
-        {
-            db.TransactionalStorage.Batch(actions => actions.Queue.EnqueueToQueue("ayende", new byte[] { 1, 2 }));
+			db.TransactionalStorage.Batch(actions =>
+			{
+				for (int i = 0; i < 6; i++)
+				{
+					actions.Queue.PeekFromQueue("ayende").First();
+				}
+				Assert.Equal(null, actions.Queue.PeekFromQueue("ayende").FirstOrDefault());
+			});
+		}
 
-            db.TransactionalStorage.Batch(actions =>
-            {
-                actions.Queue.DeleteFromQueue("ayende", actions.Queue.PeekFromQueue("ayende").First().Item2);
-                Assert.Equal(null, actions.Queue.PeekFromQueue("ayende").FirstOrDefault());
-            });
-        }
+		[Fact]
+		public void CanDeleteQueuedData()
+		{
+			db.TransactionalStorage.Batch(actions => actions.Queue.EnqueueToQueue("ayende", new byte[] { 1, 2 }));
+
+			db.TransactionalStorage.Batch(actions =>
+			{
+				actions.Queue.DeleteFromQueue("ayende", actions.Queue.PeekFromQueue("ayende").First().Item2);
+				Assert.Equal(null, actions.Queue.PeekFromQueue("ayende").FirstOrDefault());
+			});
+		}
 
 		[Fact]
 		public void CanGetNewIdentityValues()

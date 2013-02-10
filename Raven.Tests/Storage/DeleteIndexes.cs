@@ -1,30 +1,33 @@
-using System;
+//-----------------------------------------------------------------------
+// <copyright file="DeleteIndexes.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+using Raven.Abstractions.Indexing;
+using Raven.Client.Embedded;
 using Raven.Database;
 using Raven.Database.Config;
-using Raven.Database.Indexing;
 using Xunit;
 using System.Linq;
 
 namespace Raven.Tests.Storage
 {
-	public class DeleteIndexes : AbstractDocumentStorageTest
+	public class DeleteIndexes : RavenTest
 	{
+		private readonly EmbeddableDocumentStore store;
 		private readonly DocumentDatabase db;
 
 		public DeleteIndexes()
 		{
-			db = new DocumentDatabase(new RavenConfiguration {DataDirectory = "raven.db.test.esent", RunInUnreliableYetFastModeThatIsNotSuitableForProduction = true});
+			store = NewDocumentStore();
+			db = store.DocumentDatabase;
 		}
-
-		#region IDisposable Members
 
 		public override void Dispose()
 		{
-			db.Dispose();
+			store.Dispose();
 			base.Dispose();
 		}
-
-		#endregion
 
 		[Fact]
 		public void Can_remove_index()
@@ -33,9 +36,9 @@ namespace Raven.Tests.Storage
 					   new IndexDefinition
 					   {
 						   Map = @"
-    from doc in docs
-    where doc.type == ""page""
-    select new { Key = doc.title, Value = doc.content, Size = doc.size };
+	from doc in docs
+	where doc.type == ""page""
+	select new { Key = doc.title, Value = doc.content, Size = doc.size };
 "
 					   });
 			db.DeleteIndex("pagesByTitle");
@@ -48,9 +51,9 @@ namespace Raven.Tests.Storage
 		{
 			const string definition =
 				@"
-    from doc in docs
-    where doc.type == ""page""
-    select new { Key = doc.title, Value = doc.content, Size = doc.size };
+	from doc in docs
+	where doc.type == ""page""
+	select new { Key = doc.title, Value = doc.content, Size = doc.size };
 ";
 			db.PutIndex("pagesByTitle", new IndexDefinition{Map = definition});
 			db.DeleteIndex("pagesByTitle");

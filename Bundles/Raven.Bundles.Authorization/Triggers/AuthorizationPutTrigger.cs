@@ -1,16 +1,18 @@
-using System;
+//-----------------------------------------------------------------------
+// <copyright file="AuthorizationPutTrigger.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System.IO;
-using System.Web;
-using Newtonsoft.Json.Linq;
-using Raven.Database;
+using Raven.Abstractions.Data;
 using Raven.Database.Plugins;
-using Raven.Http;
+using Raven.Database.Server;
+using Raven.Json.Linq;
 
 namespace Raven.Bundles.Authorization.Triggers
 {
 	public class AuthorizationPutTrigger : AbstractPutTrigger
 	{
-
 		public AuthorizationDecisions AuthorizationDecisions { get; set; }
 
 		public override void Initialize()
@@ -18,25 +20,12 @@ namespace Raven.Bundles.Authorization.Triggers
 			AuthorizationDecisions = new AuthorizationDecisions(Database);
 		}
 
-		/// <summary>
-		/// Reset the cache for the newly put document if it is a raven authorization document
-		/// </summary>
-		public override void AfterPut(string key, JObject document, JObject metadata, Guid etag,
-		                              TransactionInformation transactionInformation)
+		public override VetoResult AllowPut(string key, RavenJObject document, RavenJObject metadata, TransactionInformation transactionInformation)
 		{
-			if (key.StartsWith("Authorization", StringComparison.InvariantCultureIgnoreCase))
-				AuthorizationDecisions.RemoveDocumentFromCache(key);
-		}
-
-		public override VetoResult AllowPut(string key, JObject document, JObject metadata, TransactionInformation transactionInformation)
-		{
-			if(AuthorizationContext.IsInAuthorizationContext)
-				return VetoResult.Allowed;
-
-			using(AuthorizationContext.Enter())
+			using (Database.DisableAllTriggersForCurrentThread())
 			{
-                var user = CurrentOperationContext.Headers.Value[Constants.RavenAuthorizationUser];
-                var operation = CurrentOperationContext.Headers.Value[Constants.RavenAuthorizationOperation];
+				var user = CurrentOperationContext.Headers.Value[Constants.RavenAuthorizationUser];
+				var operation = CurrentOperationContext.Headers.Value[Constants.RavenAuthorizationOperation];
 				if (string.IsNullOrEmpty(operation) || string.IsNullOrEmpty(user))
 					return VetoResult.Allowed;
 

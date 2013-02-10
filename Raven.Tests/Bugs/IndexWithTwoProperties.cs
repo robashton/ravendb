@@ -1,10 +1,16 @@
+//-----------------------------------------------------------------------
+// <copyright file="IndexWithTwoProperties.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System.Linq;
+using Raven.Abstractions.Indexing;
 using Raven.Client.Indexes;
 using Xunit;
 
 namespace Raven.Tests.Bugs
 {
-	public class IndexWithTwoProperties : LocalClientTest
+	public class IndexWithTwoProperties : RavenTest
 	{
 		[Fact]
 		public void CanCreateIndexByTwoProperties()
@@ -22,7 +28,7 @@ namespace Raven.Tests.Bugs
 
 				store.DatabaseCommands.PutIndex(
 					"FeedSync/TwoProperties",
-					new IndexDefinition<Foo>
+					new IndexDefinitionBuilder<Foo>
 
 
 					{

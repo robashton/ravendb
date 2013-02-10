@@ -1,11 +1,16 @@
+//-----------------------------------------------------------------------
+// <copyright file="DocumentToJsonAndBackTest.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using Raven.Abstractions.Linq;
+using Raven.Json.Linq;
 using Raven.Client.Document;
 using Raven.Client.Indexes;
 using Raven.Database.Linq;
-using Raven.Database.Plugins;
 using Xunit;
 
 namespace Raven.Tests.Bugs
@@ -26,7 +31,7 @@ namespace Raven.Tests.Bugs
 		{
 			var conventions = new DocumentConvention();
 
-			var jObject = JObject.FromObject(page, conventions.CreateSerializer());
+			var jObject = RavenJObject.FromObject(page, conventions.CreateSerializer());
 
 			dynamic dynamicObject = new DynamicJsonObject(jObject);
 			Assert.NotNull(dynamicObject.CoAuthors as IEnumerable);
@@ -38,8 +43,7 @@ namespace Raven.Tests.Bugs
 		public void ListOnDynamicJsonObjectFromJsonIsAnArray()
 		{
 			var conventions = new DocumentConvention();
-			var jObject = JObject.FromObject(page,
-											 conventions.CreateSerializer());
+			var jObject = RavenJObject.FromObject(page, conventions.CreateSerializer());
 
 			dynamic dynamicObject = new DynamicJsonObject(jObject);
 			Assert.NotNull(dynamicObject.CoAuthors as IEnumerable);
@@ -51,27 +55,24 @@ namespace Raven.Tests.Bugs
 		[Fact]
 		public void LinqQueryWithStaticCallOnEnumerableIsTranslatedToExtensionMethod()
 		{
-			var indexDefinition = new IndexDefinition<Page>
+			var indexDefinition = new IndexDefinitionBuilder<Page>
 			{
 				Map = pages => from p in pages
-							   from coAuthor in Enumerable.DefaultIfEmpty(p.CoAuthors)
+							   from coAuthor in p.CoAuthors.DefaultIfEmpty()
 							   select new
 							   {
 								   p.Id,
 								   CoAuthorUserID = coAuthor != null ? coAuthor.UserId : -1
 							   }
 			}.ToIndexDefinition(new DocumentConvention());
-			var expectedMapTranslation =
-				@"docs.Pages
-	.SelectMany(p => p.CoAuthors.DefaultIfEmpty(), (p, coAuthor) => new {Id = p.Id, CoAuthorUserID = coAuthor != null ? coAuthor.UserId : -1})";
-			Assert.Equal(expectedMapTranslation, indexDefinition.Map);
+			Assert.Contains("p.CoAuthors.DefaultIfEmpty()", indexDefinition.Map);
 		}
 
 
 		[Fact]
 		public void LinqQueryWithStaticCallOnEnumerableIsCanBeCompiledAndRun()
 		{
-			var indexDefinition = new IndexDefinition<Page>
+			var indexDefinition = new IndexDefinitionBuilder<Page>
 			{
 				Map = pages => from p in pages
 							   from coAuthor in p.CoAuthors.DefaultIfEmpty()
@@ -83,22 +84,18 @@ namespace Raven.Tests.Bugs
 			}.ToIndexDefinition(new DocumentConvention());
 
 			var mapInstance = new DynamicViewCompiler("testView",
-													  indexDefinition, new AbstractDynamicCompilationExtension[] { }).
+													  indexDefinition, ".").
 				GenerateInstance();
 
 			var conventions = new DocumentConvention();
-			var o = JObject.FromObject(page,conventions.CreateSerializer());
-			o["@metadata"] = new JObject(
-				new JProperty("Raven-Entity-Name", "Pages")
-				);
+			var o = RavenJObject.FromObject(page,conventions.CreateSerializer());
+			o["@metadata"] = new RavenJObject {{"Raven-Entity-Name", "Pages"}};
 			dynamic dynamicObject = new DynamicJsonObject(o);
 
-			var result = mapInstance.MapDefinition(new[] { dynamicObject }).ToList<object>();
+			var result = mapInstance.MapDefinitions[0](new[] { dynamicObject }).ToList<object>();
 			Assert.Equal("{ Id = 0, CoAuthorUserID = 1, __document_id =  }", result[0].ToString());
 			Assert.Equal("{ Id = 0, CoAuthorUserID = 2, __document_id =  }", result[1].ToString());
 		}
-
-		#region Nested type: Page
 
 		private class Page
 		{
@@ -112,15 +109,9 @@ namespace Raven.Tests.Bugs
 			}
 		}
 
-		#endregion
-
-		#region Nested type: User
-
 		private class User
 		{
 			public int UserId;
 		}
-
-		#endregion
 	}
 }

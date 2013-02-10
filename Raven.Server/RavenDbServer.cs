@@ -1,8 +1,12 @@
+//-----------------------------------------------------------------------
+// <copyright file="RavenDbServer.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using Raven.Database;
 using Raven.Database.Config;
 using Raven.Database.Server;
-using Raven.Http;
 
 namespace Raven.Server
 {
@@ -23,14 +27,13 @@ namespace Raven.Server
 
 		public RavenDbServer(RavenConfiguration settings)
 		{
-			settings.LoadLoggingSettings();
 			database = new DocumentDatabase(settings);
 
 			try
 			{
 				database.SpinBackgroundWorkers();
-				server = new RavenDbHttpServer(settings, database);
-				server.Start();
+				server = new HttpServer(settings, database);
+				server.StartListening();
 			}
 			catch (Exception)
 			{
@@ -41,15 +44,10 @@ namespace Raven.Server
 			}
 		}
 
-		#region IDisposable Members
-
 		public void Dispose()
 		{
 			server.Dispose();
 			database.Dispose();
 		}
-
-		#endregion
-
 	}
 }

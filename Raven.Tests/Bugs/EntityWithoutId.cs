@@ -1,8 +1,13 @@
+//-----------------------------------------------------------------------
+// <copyright file="EntityWithoutId.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using Xunit;
 
 namespace Raven.Tests.Bugs
 {
-	public class EntityWithoutId : LocalClientTest
+	public class EntityWithoutId : RavenTest
 	{
 		[Fact]
 		public void CanBeSaved()
@@ -120,7 +125,7 @@ namespace Raven.Tests.Bugs
 					for (int i = 0; i < 5; i++)
 					{
 						var clone = s.Load<User>("users/" + (i + 1));
-                        Assert.Equal("users/" + (i + 1), s.Advanced.GetDocumentId(clone));
+						Assert.Equal("users/" + (i + 1), s.Advanced.GetDocumentId(clone));
 					}
 				}
 			}

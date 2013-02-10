@@ -1,10 +1,15 @@
+//-----------------------------------------------------------------------
+// <copyright file="ReuseQuery.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using Raven.Client;
 using Xunit;
 using System.Linq;
 
 namespace Raven.Tests.Bugs
 {
-	public class ReuseQuery : LocalClientTest
+	public class ReuseQuery : RavenTest
 	{
 		[Fact]
 		public void CanReuseQuery()
@@ -13,7 +18,7 @@ namespace Raven.Tests.Bugs
 			{
 				using(var session = store.OpenSession())
 				{
-					var query = session.Query<object>(RavenExtensions.RavenDocumentByEntityName);
+					var query = session.Query<object>();
 
 					query.Count();
 					query.ToList();

@@ -1,13 +1,20 @@
+//-----------------------------------------------------------------------
+// <copyright file="QueryWithReservedCharacters.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.Linq;
-using Raven.Client.Client;
+using Raven.Abstractions.Indexing;
+using Raven.Abstractions.Util;
+using Raven.Client.Connection;
 using Raven.Client.Document;
 using Raven.Database.Indexing;
 using Xunit;
 
 namespace Raven.Tests.Bugs
 {
-	public class QueryWithReservedCharacters : LocalClientTest
+	public class QueryWithReservedCharacters : RavenTest
 	{
 		[Fact]
 		public void WhenQueryingByGenericClrTypes_ThenAutoQuotedLuceneQueryFails()
@@ -34,8 +41,8 @@ namespace Raven.Tests.Bugs
 				{
 					var typeName = ReflectionUtil.GetFullNameWithoutVersionInformation(typeof (Bar<Foo>));
 					var allSync = session
-                        .Advanced
-                        .LuceneQuery<Bar<Foo>>("ByClr")
+						.Advanced
+						.LuceneQuery<Bar<Foo>>("ByClr")
 						.Where("ClrType:[[" + RavenQuery.Escape(typeName) + "]]")
 						.WaitForNonStaleResultsAsOfNow(TimeSpan.MaxValue)
 						.ToList();
@@ -52,7 +59,7 @@ namespace Raven.Tests.Bugs
 			{
 				using (var session = store.OpenSession())
 				{
-                    session.Advanced.LuceneQuery<object>("Raven/DocumentsByEntityName")
+					session.Advanced.LuceneQuery<object>("Raven/DocumentsByEntityName")
 						.Where(RavenQuery.Escape("foo]]]]"))
 						.ToList();
 				}

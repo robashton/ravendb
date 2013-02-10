@@ -1,4 +1,10 @@
+//-----------------------------------------------------------------------
+// <copyright file="SortingOnLong.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
+using Raven.Abstractions.Indexing;
 using Raven.Client;
 using Raven.Database.Indexing;
 using Xunit;
@@ -6,7 +12,7 @@ using System.Linq;
 
 namespace Raven.Tests.Bugs
 {
-	public class SortingOnLong : LocalClientTest
+	public class SortingOnLong : RavenTest
 	{
 		void UsingDatabaseOfFoos(Action<IDocumentSession> action)
 		{
@@ -51,7 +57,7 @@ namespace Raven.Tests.Bugs
 		{
 			UsingDatabaseOfFoos(delegate(IDocumentSession session)
 			{
-                var foos1 = session.Advanced.LuceneQuery<Foo>("long")
+				var foos1 = session.Advanced.LuceneQuery<Foo>("long")
 					.WaitForNonStaleResults()
 					.OrderBy("Value_Range")
 					.ToList();
@@ -87,7 +93,7 @@ namespace Raven.Tests.Bugs
 		{
 			UsingDatabaseOfFoos(delegate(IDocumentSession session)
 			{
-                var foos1 = session.Advanced.LuceneQuery<Foo>("long")
+				var foos1 = session.Advanced.LuceneQuery<Foo>("long")
 					.WaitForNonStaleResults()
 					.OrderBy("-Value_Range")
 					.ToList();

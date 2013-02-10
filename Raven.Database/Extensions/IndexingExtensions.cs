@@ -1,3 +1,8 @@
+//-----------------------------------------------------------------------
+// <copyright file="IndexingExtensions.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
 using System.Globalization;
 using System.Linq;
@@ -5,137 +10,198 @@ using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
 using Lucene.Net.Search;
-using Raven.Database.Data;
+using Raven.Abstractions.Data;
+using Raven.Abstractions.Indexing;
 using Raven.Database.Indexing;
+using Raven.Database.Indexing.Sorting;
+using Raven.Database.Server;
+using Constants = Raven.Abstractions.Data.Constants;
 
 namespace Raven.Database.Extensions
 {
-    public static class IndexingExtensions
-    {
-        public static Analyzer CreateAnalyzerInstance(string name, string analyzerTypeAsString)
-        {
-            var analyzerType = typeof(StandardAnalyzer).Assembly.GetType(analyzerTypeAsString) ??
-                Type.GetType(analyzerTypeAsString);
-            if (analyzerType == null)
-                throw new InvalidOperationException("Cannot find type '" + analyzerTypeAsString + "' for field: " + name);
-            return (Analyzer)Activator.CreateInstance(analyzerType);
-        }
+	public static class IndexingExtensions
+	{
+		public static Analyzer CreateAnalyzerInstance(string name, string analyzerTypeAsString)
+		{
+			var analyzerType = typeof(StandardAnalyzer).Assembly.GetType(analyzerTypeAsString) ??
+				Type.GetType(analyzerTypeAsString);
+			if (analyzerType == null)
+				throw new InvalidOperationException("Cannot find analyzer type '" + analyzerTypeAsString + "' for field: " + name);
+			try
+			{
+				// try to get parameterless ctor
+				var ctors = analyzerType.GetConstructor(Type.EmptyTypes);
+				if (ctors != null)
+					return (Analyzer)Activator.CreateInstance(analyzerType);
 
-        public static Filter GetFilter(this IndexQuery self)
-        {
-            var spatialIndexQuery = self as SpatialIndexQuery;
-            if(spatialIndexQuery != null)
-            {
-                var dq = new Lucene.Net.Spatial.Tier.DistanceQueryBuilder(
-                    spatialIndexQuery.Latitude,
-                    spatialIndexQuery.Longitude,
-                    spatialIndexQuery.Radius,
-                    SpatialIndex.LatField,
-                    SpatialIndex.LngField,
-                    Lucene.Net.Spatial.Tier.Projectors.CartesianTierPlotter.DefaltFieldPrefix,
-                    true);
+				ctors = analyzerType.GetConstructor(new[] {typeof (Lucene.Net.Util.Version)});
+				if (ctors != null)
+					return (Analyzer)Activator.CreateInstance(analyzerType, Lucene.Net.Util.Version.LUCENE_30);
+			}
+			catch (Exception e)
+			{
+				throw new InvalidOperationException(
+					"Could not create new analyzer instance '" + name + "' for field: " +
+						name, e);
+			}
 
-                return dq.Filter;
-            }
-            return null;
-        }
+			throw new InvalidOperationException(
+				"Could not create new analyzer instance '" + name + "' for field: " + name + ". No recognizable constructor found.");
+		}
 
-        public static Analyzer GetAnalyzer(this IndexDefinition self, string name)
-        {
-            if (self.Analyzers == null)
-                return null;
-            string analyzerTypeAsString;
-            if (self.Analyzers.TryGetValue(name, out analyzerTypeAsString) == false)
-                return null;
-            return CreateAnalyzerInstance(name, analyzerTypeAsString);
-        }
+		public static Field.Index GetIndex(this IndexDefinition self, string name, Field.Index? defaultIndex)
+		{
+			if (self.Indexes == null)
+				return defaultIndex ?? Field.Index.ANALYZED_NO_NORMS;
+			FieldIndexing value;
+			if (self.Indexes.TryGetValue(name, out value) == false)
+			{
+				if(self.Indexes.TryGetValue(Constants.AllFields, out value) == false)
+				{
+					string ignored;
+					if (self.Analyzers.TryGetValue(name, out ignored) ||
+						self.Analyzers.TryGetValue(Constants.AllFields, out ignored))
+					{
+						return Field.Index.ANALYZED; // if there is a custom analyzer, the value should be analyzed
+					}
+					return defaultIndex ?? Field.Index.ANALYZED_NO_NORMS;
+				}
+			}
+			switch (value)
+			{
+				case FieldIndexing.No:
+					return Field.Index.NO;
+				case FieldIndexing.Analyzed:
+					return Field.Index.ANALYZED_NO_NORMS;
+				case FieldIndexing.NotAnalyzed:
+					return Field.Index.NOT_ANALYZED_NO_NORMS;
+				case FieldIndexing.Default:
+					return defaultIndex ?? Field.Index.ANALYZED_NO_NORMS;
+				default:
+					throw new ArgumentOutOfRangeException();
+			}
+		}
 
-        public static Field.Index GetIndex(this IndexDefinition self, string name, Field.Index defaultIndex)
-        {
-            if (self.Indexes == null)
-                return defaultIndex;
-            FieldIndexing value;
-            if (self.Indexes.TryGetValue(name, out value) == false)
-            {
-                string ignored;
-                if (self.Analyzers.TryGetValue(name, out ignored))
-                    return Field.Index.ANALYZED;// if there is a custom analyzer, the value should be analyzer
-                return defaultIndex;
-            }
-            switch (value)
-            {
-                case FieldIndexing.No:
-                    return Field.Index.NO;
-                case FieldIndexing.NotAnalyzedNoNorms:
-                    return Field.Index.NOT_ANALYZED_NO_NORMS;
-                case FieldIndexing.Analyzed:
-                    return Field.Index.ANALYZED;
-                case FieldIndexing.NotAnalyzed:
-                    return Field.Index.NOT_ANALYZED;
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
-        }
+		public static Field.Store GetStorage(this IndexDefinition self, string name, Field.Store defaultStorage)
+		{
+			if (self.Stores == null)
+				return defaultStorage;
+			FieldStorage value;
+			if (self.Stores.TryGetValue(name, out value) == false)
+			{
+				// do we have a overriding default?
+				if (self.Stores.TryGetValue(Constants.AllFields, out value) == false)
+					return defaultStorage;
+			}
+			switch (value)
+			{
+				case FieldStorage.Yes:
+					return Field.Store.YES;
+				case FieldStorage.No:
+					return Field.Store.NO;
+				default:
+					throw new ArgumentOutOfRangeException();
+			}
+		}
 
-        public static Field.Store GetStorage(this IndexDefinition self, string name, Field.Store defaultStorage)
-        {
-            if (self.Stores == null)
-                return defaultStorage;
-            FieldStorage value;
-            if (self.Stores.TryGetValue(name, out value) == false)
-                return defaultStorage;
-            switch (value)
-            {
-                case FieldStorage.Yes:
-                    return Field.Store.YES;
-                case FieldStorage.No:
-                    return Field.Store.NO;
-                case FieldStorage.Compress:
-                    return Field.Store.COMPRESS;
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
-        }
+		public static Field.TermVector GetTermVector(this IndexDefinition self, string name, Field.TermVector defaultTermVector)
+		{
+			if (self.TermVectors == null)
+				return defaultTermVector;
 
-	
-        public static Sort GetSort(this IndexQuery self, Filter filter, IndexDefinition indexDefinition)
-        {
-            var spatialIndexQuery = self as SpatialIndexQuery;
-            if(spatialIndexQuery != null && spatialIndexQuery.SortByDistance)
-            {
-                var dsort = new Lucene.Net.Spatial.Tier.DistanceFieldComparatorSource((Lucene.Net.Spatial.Tier.DistanceFilter)filter);
+			FieldTermVector value;
+			if (self.TermVectors.TryGetValue(name, out value) == false)
+				return defaultTermVector;
 
-                return new Sort(new SortField("foo", dsort, false));
-		
-            }
+			if (value != FieldTermVector.No && self.GetIndex(name, null) == Field.Index.NO)
+			{
+				throw new InvalidOperationException(string.Format("TermVectors cannot be enabled for the field {0} because Indexing is set to No", name));
+			}
 
-            if (self.SortedFields != null && self.SortedFields.Length > 0)
-                return new Sort(self.SortedFields.Select(x => ToLuceneSortField(indexDefinition, x)).ToArray());
-            return null;
-        }
+			switch (value)
+			{
+				case FieldTermVector.No:
+					return Field.TermVector.NO;
+				case FieldTermVector.WithOffsets:
+					return Field.TermVector.WITH_OFFSETS;
+				case FieldTermVector.WithPositions:
+					return Field.TermVector.WITH_POSITIONS;
+				case FieldTermVector.WithPositionsAndOffsets:
+					return Field.TermVector.WITH_POSITIONS_OFFSETS;
+				case FieldTermVector.Yes:
+					return Field.TermVector.YES;
+				default:
+					throw new ArgumentOutOfRangeException();
+			}
+		}
 
-        private static SortField ToLuceneSortField(IndexDefinition definition, SortedField sortedField)
-        {
-            SortOptions? sortOptions = GetSortOption(definition, sortedField.Field);
-            if (sortOptions == null)
-                return new SortField(sortedField.Field, CultureInfo.InvariantCulture, sortedField.Descending);
-            return new SortField(sortedField.Field, (int) sortOptions.Value, sortedField.Descending);
-        }
+		public static Sort GetSort(this IndexQuery self, IndexDefinition indexDefinition)
+		{
+			var spatialQuery = self as SpatialIndexQuery;
+			if (self.SortedFields == null || self.SortedFields.Length <= 0)
+			{
+				return null;
+			}
 
-        public static SortOptions? GetSortOption(this IndexDefinition self, string name)
-        {
-            SortOptions value;
-            if (!self.SortOptions.TryGetValue(name, out value))
-            {
-                if (!name.EndsWith("_Range"))
-                {
-                    return null;
-                }
-                string nameWithoutRange = name.Substring(0, name.Length - "_Range".Length);
-                if (!self.SortOptions.TryGetValue(nameWithoutRange, out value))
-                    return null;
-            }
-            return value;
-        }
-    }
+
+			return new Sort(self.SortedFields
+							.Select(sortedField =>
+							{
+								if (sortedField.Field == Constants.TemporaryScoreValue)
+								{
+									return SortField.FIELD_SCORE;
+								}
+								if(sortedField.Field.StartsWith(Constants.RandomFieldName))
+								{
+									var parts = sortedField.Field.Split(new[]{';'}, StringSplitOptions.RemoveEmptyEntries);
+									if (parts.Length < 2) // truly random
+										return new RandomSortField(Guid.NewGuid().ToString());
+									return new RandomSortField(parts[1]);
+								}
+								if (spatialQuery != null && sortedField.Field == Constants.DistanceFieldName)
+								{
+									var shape = SpatialIndex.ReadShape(spatialQuery.QueryShape);
+									var dsort = new SpatialDistanceFieldComparatorSource(shape.GetCenter());
+									return new SortField(Constants.DistanceFieldName, dsort, sortedField.Descending);
+								}
+								var sortOptions = GetSortOption(indexDefinition, sortedField.Field);
+								if (sortOptions == null || sortOptions == SortOptions.None)
+									return new SortField(sortedField.Field, CultureInfo.InvariantCulture, sortedField.Descending);
+							
+								return new SortField(sortedField.Field, (int)sortOptions.Value, sortedField.Descending);
+							
+							})
+							.ToArray());
+		}
+
+
+		public static SortOptions? GetSortOption(this IndexDefinition self, string name)
+		{
+			SortOptions value;
+			if (self.SortOptions.TryGetValue(name, out value))
+			{
+				return value;
+			}
+			if (self.SortOptions.TryGetValue(Constants.AllFields, out value))
+				return value;
+
+			if (name.EndsWith("_Range"))
+			{
+				string nameWithoutRange = name.Substring(0, name.Length - "_Range".Length);
+				if (self.SortOptions.TryGetValue(nameWithoutRange, out value))
+					return value;
+
+				if (self.SortOptions.TryGetValue(Constants.AllFields, out value))
+					return value;
+			}
+			if (CurrentOperationContext.Headers.Value == null)
+				return value;
+
+			var hint = CurrentOperationContext.Headers.Value["SortHint-" + name];
+			if (string.IsNullOrEmpty(hint))
+				return value;
+			Enum.TryParse(hint, true, out value);
+			return value;
+		}
+	}
 }

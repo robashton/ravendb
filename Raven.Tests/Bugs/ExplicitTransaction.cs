@@ -1,11 +1,16 @@
+//-----------------------------------------------------------------------
+// <copyright file="ExplicitTransaction.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System.Threading;
-using Raven.Client.Client;
+using Raven.Client.Connection;
 using Raven.Tests.Document;
 using Xunit;
 
 namespace Raven.Tests.Bugs
 {
-	public class ExplicitTransaction : LocalClientTest
+	public class ExplicitTransaction : RavenTest
 	{
 		[Fact]
 		public void Can_use_transactions_to_isolate_saves()

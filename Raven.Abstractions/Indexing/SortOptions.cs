@@ -1,10 +1,19 @@
-namespace Raven.Database.Indexing
+//-----------------------------------------------------------------------
+// <copyright file="SortOptions.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+namespace Raven.Abstractions.Indexing
 {
 	/// <summary>
 	/// The sort options to use for a particular field
 	/// </summary>
 	public enum SortOptions
 	{
+		/// <summary>
+		/// No sort options
+		/// </summary>
+		None = 0,
 		/// <summary>Sort using term values as Strings.  Sort values are String and lower
 		/// values are at the front. 
 		/// </summary>

@@ -1,9 +1,17 @@
+//-----------------------------------------------------------------------
+// <copyright file="MetadataUpdates.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System.Linq;
+using Raven.Client.Document;
 using Xunit;
-using Newtonsoft.Json.Linq;
+using Raven.Json.Linq;
 
 namespace Raven.Tests.Bugs
 {
-	public class MetadataUpdates : LocalClientTest
+	public class MetadataUpdates : RavenTest
 	{
 
 		[Fact]
@@ -20,7 +28,7 @@ namespace Raven.Tests.Bugs
 				using (var session = store.OpenSession())
 				{
 					session.Store(foo);
-                    session.Advanced.GetMetadataFor(foo)["bar"] = "baz";
+					session.Advanced.GetMetadataFor(foo)["bar"] = "baz";
 					session.SaveChanges();
 				}
 
@@ -30,7 +38,7 @@ namespace Raven.Tests.Bugs
 				using (var session = store.OpenSession())
 				{
 					var saved = session.Load<IndexWithTwoProperties.Foo>(foo.Id);
-                    var metadata = session.Advanced.GetMetadataFor(saved);
+					var metadata = session.Advanced.GetMetadataFor(saved);
 					Assert.Equal("baz", metadata["bar"].Value<string>());
 
 
@@ -53,7 +61,7 @@ namespace Raven.Tests.Bugs
 					var saved = session.Load<IndexWithTwoProperties.Foo>(foo.Id);
 
 
-                    var metadata = session.Advanced.GetMetadataFor(saved);
+					var metadata = session.Advanced.GetMetadataFor(saved);
 					// FAILS HERE
 					var jToken = metadata["bar"];
 					Assert.Equal("baz", jToken.Value<string>());
@@ -81,7 +89,7 @@ namespace Raven.Tests.Bugs
 				using (var session = store.OpenSession())
 				{
 					var foo = session.Load<IndexWithTwoProperties.Foo>(id);
-                    var metadata = session.Advanced.GetMetadataFor(foo);
+					var metadata = session.Advanced.GetMetadataFor(foo);
 
 					metadata["foo"] = "bar";
 					session.SaveChanges();
@@ -91,9 +99,40 @@ namespace Raven.Tests.Bugs
 				using (var session = store.OpenSession())
 				{
 					var foo = session.Load<IndexWithTwoProperties.Foo>(id);
-                    var metadata = session.Advanced.GetMetadataFor(foo);
+					var metadata = session.Advanced.GetMetadataFor(foo);
 
 					Assert.Equal("bar", metadata["foo"].Value<string>());
+				}
+			}
+		}
+
+		[Fact]
+		public void Can_query_metadata()
+		{
+			using (var store = NewDocumentStore())
+			{
+				var user1 = new User {Name = "Joe Schmoe"};
+				const string propertyName1 = "Test-Property-1";
+				const string propertyValue1 = "Test-Value-1";
+				using (var session = store.OpenSession())
+				{
+					session.Store(user1);
+					var metadata1 = session.Advanced.GetMetadataFor(user1);
+					metadata1[propertyName1] = propertyValue1;
+					session.Store(new User {Name = "Ralph Schmoe"});
+					session.SaveChanges();
+				}
+
+				using (var session = store.OpenSession())
+				{
+					var result = session.Advanced.LuceneQuery<User>()
+						.WhereEquals("@metadata." + propertyName1, propertyValue1)
+						.ToList();
+
+					Assert.NotNull(result);
+					Assert.Equal(1, result.Count);
+					var metadata = session.Advanced.GetMetadataFor(result[0]);
+					Assert.Equal(propertyValue1, metadata[propertyName1]);
 				}
 			}
 		}

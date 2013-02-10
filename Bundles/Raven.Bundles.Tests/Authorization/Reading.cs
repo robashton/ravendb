@@ -1,7 +1,12 @@
+//-----------------------------------------------------------------------
+// <copyright file="Reading.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+extern alias client;
 using System.Linq;
-using Raven.Bundles.Authorization.Model;
-using Raven.Bundles.Tests.Versioning;
-using Raven.Client.Authorization;
+using client::Raven.Client.Authorization;
+using client::Raven.Bundles.Authorization.Model;
 using Raven.Client.Exceptions;
 using Xunit;
 
@@ -37,10 +42,11 @@ namespace Raven.Bundles.Tests.Authorization
 
 				var readVetoException = Assert.Throws<ReadVetoException>(() => s.Load<Company>(company.Id));
 
-				Assert.Equal(readVetoException.Message, @"Document could not be read because of a read veto.
+				Assert.Equal(@"Document could not be read because of a read veto.
 The read was vetoed by: Raven.Bundles.Authorization.Triggers.AuthorizationReadTrigger
-Veto reason: Could not find any permissions for operation: Company/Bid on companies/1
-");
+Veto reason: Could not find any permissions for operation: Company/Bid on companies/1 for user Authorization/Users/Ayende.
+No one may perform operation Company/Bid on companies/1
+", readVetoException.Message);
 			}
 		}
 
@@ -117,7 +123,7 @@ Veto reason: Could not find any permissions for operation: Company/Bid on compan
 		}
 
 		[Fact]
-		public void DocumentWithoutPermissionWillBeFilteredOutSiltently()
+		public void DocumentWithoutPermissionWillBeFilteredOutSilently()
 		{
 			var company = new Company
 			{
@@ -142,7 +148,7 @@ Veto reason: Could not find any permissions for operation: Company/Bid on compan
 			{
 				s.SecureFor(UserId, "Company/Bid");
 
-                Assert.Equal(0, s.Advanced.LuceneQuery<Company>()
+				Assert.Equal(0, s.Advanced.LuceneQuery<Company>()
 									.WaitForNonStaleResults()
 				                	.ToList().Count);
 			}

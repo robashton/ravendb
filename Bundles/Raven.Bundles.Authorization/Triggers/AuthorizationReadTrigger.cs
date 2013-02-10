@@ -1,9 +1,13 @@
+//-----------------------------------------------------------------------
+// <copyright file="AuthorizationReadTrigger.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System.IO;
-using System.Web;
-using Newtonsoft.Json.Linq;
-using Raven.Database;
+using Raven.Abstractions.Data;
 using Raven.Database.Plugins;
-using Raven.Http;
+using Raven.Database.Server;
+using Raven.Json.Linq;
 
 namespace Raven.Bundles.Authorization.Triggers
 {
@@ -16,16 +20,13 @@ namespace Raven.Bundles.Authorization.Triggers
 			AuthorizationDecisions = new AuthorizationDecisions(Database);	
 		}
 
-		public override ReadVetoResult AllowRead(string key, JObject document, JObject metadata, ReadOperation readOperation,
+		public override ReadVetoResult AllowRead(string key, RavenJObject metadata, ReadOperation readOperation,
 		                                         TransactionInformation transactionInformation)
 		{
-			if (AuthorizationContext.IsInAuthorizationContext)
-				return ReadVetoResult.Allowed;
-
-			using(AuthorizationContext.Enter())
+			using (Database.DisableAllTriggersForCurrentThread())
 			{
-                var user = CurrentOperationContext.Headers.Value[Constants.RavenAuthorizationUser];
-                var operation = CurrentOperationContext.Headers.Value[Constants.RavenAuthorizationOperation];
+				var user = CurrentOperationContext.Headers.Value[Constants.RavenAuthorizationUser];
+				var operation = CurrentOperationContext.Headers.Value[Constants.RavenAuthorizationOperation];
 				if (string.IsNullOrEmpty(operation) || string.IsNullOrEmpty(user))
 					return ReadVetoResult.Allowed;
 

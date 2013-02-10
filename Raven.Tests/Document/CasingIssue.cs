@@ -1,46 +1,15 @@
-using System;
-using System.IO;
-using System.Reflection;
-using Raven.Client.Client;
-using Raven.Client.Document;
-using Raven.Database.Config;
-using Raven.Database.Extensions;
+//-----------------------------------------------------------------------
+// <copyright file="CasingIssue.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using Xunit;
 using System.Linq;
 
 namespace Raven.Tests.Document
 {
-	public class CasingIssue : RemoteClientTest, IDisposable
+	public class CasingIssue : RemoteClientTest
 	{
-		private string path;
-
-		#region IDisposable Members
-
-		public void Dispose()
-		{
-            IOExtensions.DeleteDirectory(path);
-		}
-
-		#endregion
-
-
-		private DocumentStore NewDocumentStore()
-		{
-			path = Path.GetDirectoryName(Assembly.GetAssembly(typeof(DocumentStoreServerTests)).CodeBase);
-			path = Path.Combine(path, "TestDb").Substring(6);
-            var documentStore = new EmbeddableDocumentStore
-			{
-				Configuration = 
-				{
-					DataDirectory = path,
-					RunInUnreliableYetFastModeThatIsNotSuitableForProduction = true
-				}
-				
-			};
-			documentStore.Initialize();
-			return documentStore;
-		}
-
 		[Fact]
 		public void CanQueryByEntityType()
 		{
@@ -50,7 +19,7 @@ namespace Raven.Tests.Document
 				session.Store(new Post{Title = "test", Body = "casing"});
 				session.SaveChanges();
 
-                var single = session.Advanced.LuceneQuery<Post>()
+				var single = session.Advanced.LuceneQuery<Post>()
 					.WaitForNonStaleResults()
 					.Single();
 
@@ -68,7 +37,7 @@ namespace Raven.Tests.Document
 				session.Store(entity);
 				session.SaveChanges();
 
-                var single = session.Advanced.LuceneQuery<Post>()
+				var single = session.Advanced.LuceneQuery<Post>()
 					.WaitForNonStaleResults()
 					.Single();
 

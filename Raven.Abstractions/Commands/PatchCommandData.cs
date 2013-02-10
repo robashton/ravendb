@@ -1,10 +1,14 @@
+//-----------------------------------------------------------------------
+// <copyright file="PatchCommandData.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
-using Newtonsoft.Json.Linq;
-using Raven.Database.Json;
 using System.Linq;
-using Raven.Http;
+using Raven.Abstractions.Data;
+using Raven.Json.Linq;
 
-namespace Raven.Database.Data
+namespace Raven.Abstractions.Commands
 {
 	///<summary>
 	/// A single batch operation for a document PATCH
@@ -36,34 +40,49 @@ namespace Raven.Database.Data
 		}
 
 		/// <summary>
-		/// Gets the etag.
+		/// Gets or sets the etag.
 		/// </summary>
 		/// <value>The etag.</value>
 		public Guid? Etag
 		{
 			get; set;
 		}
+
+		/// <summary>
+		/// Gets the transaction information.
+		/// </summary>
+		/// <value>The transaction information.</value>
 		public TransactionInformation TransactionInformation
 		{
 			get; set;
 		}
 
-		public JObject Metadata
+		/// <summary>
+		/// Gets or sets the metadata.
+		/// </summary>
+		/// <value>The metadata.</value>
+		public RavenJObject Metadata
 		{
 			get; set;
 		}
 
-        /// <summary>
+		public RavenJObject AdditionalData { get; set; }
+
+		/// <summary>
 		/// Translate this instance to a Json object.
 		/// </summary>
-		public JObject ToJson()
+		public RavenJObject ToJson()
 		{
-			return new JObject(
-				new JProperty("Key", Key),
-				new JProperty("Method", Method),
-				new JProperty("Etag", Etag == null ? null : new JValue(Etag.ToString())),
-				new JProperty("Patches", new JArray(Patches.Select(x=>x.ToJson())))
-				);
+			var ret = new RavenJObject
+			       	{
+						{"Key", Key},
+						{"Method", Method},
+						{"Patches", new RavenJArray(Patches.Select(x => x.ToJson()))},
+						{"AdditionalData", AdditionalData}
+			       	};
+			if (Etag != null)
+				ret.Add("Etag", Etag.ToString());
+			return ret;
 		}
 	}
 }

@@ -1,4 +1,9 @@
-using System;
+//-----------------------------------------------------------------------
+// <copyright file="DocumentPermission.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+using Raven.Imports.Newtonsoft.Json;
 
 namespace Raven.Bundles.Authorization.Model
 {
@@ -10,6 +15,7 @@ namespace Raven.Bundles.Authorization.Model
 		public bool Allow { get; set; }
 		public int Priority { get; set; }
 
+		[JsonIgnore]
 		public string Explain
 		{
 			get

@@ -1,4 +1,9 @@
-namespace Raven.Database.Extensions
+//-----------------------------------------------------------------------
+// <copyright file="Reference.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
+namespace Raven.Abstractions.Extensions
 {
 	/// <summary>
 	/// A reference that can be used with lambda expression

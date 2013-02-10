@@ -1,7 +1,12 @@
+//-----------------------------------------------------------------------
+// <copyright file="JsonDocument.cs" company="Hibernating Rhinos LTD">
+//     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
+// </copyright>
+//-----------------------------------------------------------------------
 using System;
-using Newtonsoft.Json.Linq;
+using Raven.Json.Linq;
 
-namespace Raven.Database
+namespace Raven.Abstractions.Data
 {
 	/// <summary>
 	/// A document representation:
@@ -9,72 +14,106 @@ namespace Raven.Database
 	/// * Etag
 	/// * Metadata
 	/// </summary>
-	public class JsonDocument
+	public class JsonDocument : IJsonDocumentMetadata
 	{
 		/// <summary>
-		/// 	Gets or sets the document data as json.
+		/// Create a new instance of JsonDocument
+		/// </summary>
+		public JsonDocument()
+		{
+		}
+
+		private RavenJObject dataAsJson;
+		private RavenJObject metadata;
+
+		/// <summary>
+		/// Gets or sets the document data as json.
 		/// </summary>
 		/// <value>The data as json.</value>
-		public JObject DataAsJson { get; set; }
+		public RavenJObject DataAsJson
+		{
+			get { return dataAsJson ?? (dataAsJson = new RavenJObject()); }
+			set { dataAsJson = value; }
+		}
 
 		/// <summary>
-		/// 	Gets or sets the metadata for the document
+		/// Gets or sets the metadata for the document
 		/// </summary>
 		/// <value>The metadata.</value>
-		public JObject Metadata { get; set; }
+		public RavenJObject Metadata
+		{
+			get { return metadata ?? (metadata = new RavenJObject(StringComparer.InvariantCultureIgnoreCase)); }
+			set { metadata = value; }
+		}
 
 		/// <summary>
-		/// 	Gets or sets the key for the document
+		/// Gets or sets the key for the document
 		/// </summary>
 		/// <value>The key.</value>
 		public string Key { get; set; }
 
 		/// <summary>
-		/// 	Gets or sets a value indicating whether this document is non authoritive (modified by uncommitted transaction).
+		/// Gets or sets a value indicating whether this document is non authoritative (modified by uncommitted transaction).
 		/// </summary>
-		public bool NonAuthoritiveInformation { get; set; }
+		public bool? NonAuthoritativeInformation { get; set; }
 
 		/// <summary>
 		/// Gets or sets the etag.
 		/// </summary>
 		/// <value>The etag.</value>
-		public Guid Etag { get; set; }
+		public Guid? Etag { get; set; }
 
 		/// <summary>
-		/// 	Gets or sets the last modified date for the document
+		/// Gets or sets the last modified date for the document
 		/// </summary>
 		/// <value>The last modified.</value>
-		public DateTime LastModified { get; set; }
+		public DateTime? LastModified { get; set; }
 
 		/// <summary>
-		/// 	Gets or sets the projection for this document. The projection is used when loading the data directly from the index.
-		/// 	Either <see cref = "Projection" /> or <see cref = "DataAsJson" /> are valid, never both.
+		/// The ranking of this result in the current query
 		/// </summary>
-		/// <value>The projection.</value>
-		public JObject Projection { get; set; }
+		public float? TempIndexScore { get; set; }
 
 		/// <summary>
-		/// 	Translate the json document to a <see cref = "JObject" />
+		/// How much space this document takes on disk
+		/// Only relevant during indexing phases, and not available on the client
+		/// </summary>
+		public int SerializedSizeOnDisk;
+
+		/// <summary>
+		/// Whatever this document can be skipped from delete
+		/// Only relevant during indexing phases, and not available on the client
+		/// </summary>
+		public bool SkipDeleteFromIndex;
+
+		/// <summary>
+		/// Translate the json document to a <see cref = "RavenJObject" />
 		/// </summary>
 		/// <returns></returns>
-		public JObject ToJson()
+		public RavenJObject ToJson()
 		{
-			if (Projection != null)
-				return Projection;
+			DataAsJson.EnsureCannotBeChangeAndEnableSnapshotting();
+			Metadata.EnsureCannotBeChangeAndEnableSnapshotting();
 
-			var doc = new JObject(DataAsJson); //clone the document
-			var metadata = new JObject(Metadata); // clone the metadata
-			metadata["Last-Modified"] = JToken.FromObject(LastModified.ToString("r"));
-			var etagProp = metadata.Property("@etag");
-			if (etagProp == null)
-			{
-				etagProp = new JProperty("@etag");
-				metadata.Add(etagProp);
-			}
-			etagProp.Value = new JValue(Etag.ToString());
-			doc.Add("@metadata", metadata);
-			metadata["Non-Authoritive-Information"] = JToken.FromObject(NonAuthoritiveInformation);
+			var doc = (RavenJObject)DataAsJson.CreateSnapshot();
+			var metadata = (RavenJObject)Metadata.CreateSnapshot();
+
+			if (LastModified != null)
+				metadata[Constants.LastModified] = LastModified.Value;
+			if (Etag != null)
+				metadata["@etag"] = Etag.Value.ToString();
+			if (NonAuthoritativeInformation != null)
+				metadata["Non-Authoritative-Information"] = NonAuthoritativeInformation.Value;
+			//if (metadata.ContainsKey("@id") == false)
+			//	metadata["@id"] = Key;
+			doc["@metadata"] = metadata;
+
 			return doc;
+		}
+
+		public override string ToString()
+		{
+			return Key;
 		}
 	}
 }
