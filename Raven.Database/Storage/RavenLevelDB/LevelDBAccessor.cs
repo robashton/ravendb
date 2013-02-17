@@ -1,6 +1,6 @@
 using System;
 
-namespace Raven.Database.Storage.LevelDB
+namespace Raven.Database.Storage.RavenLevelDB
 {
     public class LevelDBAccessor
     {

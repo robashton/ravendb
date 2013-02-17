@@ -721,10 +721,11 @@
     <Compile Include="Storage\ITransactionalStorage.cs" />
     <Compile Include="Storage\ITransactionStorageActions.cs" />
     <Compile Include="Queries\SuggestionQueryRunner.cs" />
-    <Compile Include="Storage\LevelDB\DocumentStorageActions.cs" />
-    <Compile Include="Storage\LevelDB\LevelDBStorage.cs" />
-    <Compile Include="Storage\LevelDB\LevelDBAccessor.cs" />
-    <Compile Include="Storage\LevelDB\LevelDBTransaction.cs" />
+    <Compile Include="Storage\RavenLevelDB\DocumentStorageActions.cs" />
+    <Compile Include="Storage\RavenLevelDB\LevelDBStorage.cs" />
+    <Compile Include="Storage\RavenLevelDB\LevelDBAccessor.cs" />
+    <Compile Include="Storage\RavenLevelDB\LevelDBStorageActions.cs" />
+    <Compile Include="Storage\RavenLevelDB\LevelDBTransaction.cs" />
     <Compile Include="Storage\Managed\AttachmentsStorageActions.cs" />
     <Compile Include="Storage\Managed\Backup\BackupOperation.cs" />
     <Compile Include="Storage\Managed\Backup\RestoreOperation.cs" />

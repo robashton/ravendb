@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Raven.Abstractions.Data;
 using Raven.Json.Linq;
 
-namespace Raven.Database.Storage.LevelDB
+namespace Raven.Database.Storage.RavenLevelDB
 {
     public class DocumentStorageActions : IDocumentStorageActions
     {

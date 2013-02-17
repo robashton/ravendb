@@ -3,37 +3,28 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using LevelDB;
+using Raven.Abstractions.Data;
+using Raven.Abstractions.MEF;
+using Raven.Database.Config;
+using Raven.Database.Impl;
+using Raven.Database.Plugins;
 
-namespace Raven.Database.Storage.LevelDB
+namespace Raven.Database.Storage.RavenLevelDB
 {
-    public class LevelDBStorage
+    public class LevelDBStorage : ITransactionalStorage
     {
         private readonly ConcurrentDictionary<string, object> backing = new ConcurrentDictionary<string, object>();
         private readonly ConcurrentDictionary<string, int> keysToTransactionId = new ConcurrentDictionary<string, int>();
         private readonly ConcurrentDictionary<int, LevelDBTransaction> activeTransactions = new ConcurrentDictionary<int, LevelDBTransaction>();
 
         private int lastTransactionId = 0;
+        private readonly DB db;
 
-        public LevelDBStorage()
+        public LevelDBStorage(string path)
         {
-
-        }
-
-        public void Batch(Action<LevelDBAccessor> actions)
-        {
-            var transaction = this.CreateTransaction();
-            var accessor = new LevelDBAccessor(this, transaction);
-            try
-            {
-                // This won't actually do as we need to support reading written actions pre-write
-                actions(accessor);
-            }
-            catch (Exception ex)
-            {
-                this.RollbackTransaction(transaction);
-                throw;
-            }
-            this.CommitTransaction(transaction);
+            var options = new Options {CreateIfMissing = true};
+            this.db = new DB(options, path);
         }
 
         private LevelDBTransaction CreateTransaction()
@@ -74,7 +65,7 @@ namespace Raven.Database.Storage.LevelDB
                     break;
             }
 
-            List<string> keysToClear = new List<string>();
+            var keysToClear = new List<string>();
 
             foreach (var kv in this.keysToTransactionId)
             {
@@ -142,5 +133,94 @@ namespace Raven.Database.Storage.LevelDB
         {
             this.backing[id] = obj;
         }
+
+        public void Batch(Action<IStorageActionsAccessor> action)
+        {
+            var transaction = this.CreateTransaction();
+            var accessor = new LevelDBAccessor(this, transaction);
+            var storageActions = new LevelDBStorageActions(accessor);
+            try
+            {
+                action(storageActions);
+            }
+            catch (Exception ex)
+            {
+                this.RollbackTransaction(transaction);
+                throw;
+            }
+            this.CommitTransaction(transaction);
+        }
+
+        public void Dispose()
+        {
+            this.db.Dispose();
+        }
+
+        #region TO BE IMPLEMENTED
+
+        public Guid Id { get; private set; }
+        public void ExecuteImmediatelyOrRegisterForSynchronization(Action action)
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool Initialize(IUuidGenerator generator, OrderedPartCollection<AbstractDocumentCodec> documentCodecs)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void StartBackupOperation(DocumentDatabase database, string backupDestinationDirectory, bool incrementalBackup,
+                                         DatabaseDocument documentDatabase)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Restore(string backupLocation, string databaseLocation, Action<string> output, bool defrag)
+        {
+            throw new NotImplementedException();
+        }
+
+        public long GetDatabaseSizeInBytes()
+        {
+            throw new NotImplementedException();
+        }
+
+        public long GetDatabaseCacheSizeInBytes()
+        {
+            throw new NotImplementedException();
+        }
+
+        public long GetDatabaseTransactionVersionSizeInBytes()
+        {
+            throw new NotImplementedException();
+        }
+
+        public string FriendlyName { get; private set; }
+        public bool HandleException(Exception exception)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Compact(InMemoryRavenConfiguration configuration)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Guid ChangeId()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void ClearCaches()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void DumpAllStorageTables()
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
     }
 }

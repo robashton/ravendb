@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Collections.Generic;
 
-namespace Raven.Database.Storage.LevelDB
+namespace Raven.Database.Storage.RavenLevelDB
 {
     public class LevelDBTransaction
     {
