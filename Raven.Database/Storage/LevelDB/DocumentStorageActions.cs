@@ -9,6 +9,13 @@ namespace Raven.Database.Storage.LevelDB
 {
     public class DocumentStorageActions : IDocumentStorageActions
     {
+        private readonly LevelDBAccessor accessor;
+
+        public DocumentStorageActions(LevelDBAccessor accessor)
+        {
+            this.accessor = accessor;
+        }
+
         public IEnumerable<JsonDocument> GetDocumentsByReverseUpdateOrder(int start, int take)
         {
             throw new NotImplementedException();
