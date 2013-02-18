@@ -25,6 +25,7 @@ namespace Raven.Database.Storage.RavenLevelDB
         {
             var options = new Options {CreateIfMissing = true};
             this.db = new DB(options, path);
+            this.db.GetProperty()
         }
 
         private LevelDBTransaction CreateTransaction()

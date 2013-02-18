@@ -19,7 +19,7 @@ namespace Raven.Database.Storage.RavenLevelDB
             this.id = id;
             this.trackedTransactions = activeTransactions;
             foreach (var otherTransaction in this.trackedTransactions)
-            {
+            { 
                 otherTransaction.IncreaseRefCount();
             }
         }
