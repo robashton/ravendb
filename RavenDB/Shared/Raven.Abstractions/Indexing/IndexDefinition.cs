@@ -18,20 +18,26 @@ namespace Raven.Abstractions.Indexing
 		/// <summary>
 		/// Initializes a new instance of the <see cref="IndexDefinition"/> class.
 		/// </summary>
-		public IndexDefinition()
-		{
+		public IndexDefinition() 
+        {
+		    Id = String.Empty;
 			Maps = new HashSet<string>();
 			Indexes = new Dictionary<string, FieldIndexing>();
 			Stores = new Dictionary<string, FieldStorage>();
 			Analyzers = new Dictionary<string, string>();
 			SortOptions = new Dictionary<string, SortOptions>();
 			Fields = new List<string>();
-			Suggestions = new Dictionary<string, SuggestionOptions>();
+		    Suggestions = new Dictionary<string, SuggestionOptions>();
 			TermVectors = new Dictionary<string, FieldTermVector>();
 			SpatialIndexes = new Dictionary<string, SpatialOptions>();
 		}
 
-		/// <summary>
+        /// <summary>
+        /// Gets or sets the id of this index definition
+        /// </summary>
+	    public string Id { get; set; }
+
+	    /// <summary>
 		/// Get or set the name of the index
 		/// </summary>
 		public string Name { get; set; }

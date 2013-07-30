@@ -176,6 +176,7 @@ namespace Raven.Database.Storage
 
         public string CreateAndPersistIndex(IndexDefinition indexDefinition)
         {
+            indexDefinition.Id = indexDefinition.Name + Guid.NewGuid();
             var transformer = AddAndCompileIndex(indexDefinition);
             if (configuration.RunInMemory == false)
             {
