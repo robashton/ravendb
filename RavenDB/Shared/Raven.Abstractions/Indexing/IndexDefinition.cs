@@ -20,7 +20,7 @@ namespace Raven.Abstractions.Indexing
 		/// </summary>
 		public IndexDefinition() 
         {
-		    Id = String.Empty;
+		    LucenePathName = String.Empty;
 			Maps = new HashSet<string>();
 			Indexes = new Dictionary<string, FieldIndexing>();
 			Stores = new Dictionary<string, FieldStorage>();
@@ -35,7 +35,7 @@ namespace Raven.Abstractions.Indexing
         /// <summary>
         /// Gets or sets the id of this index definition
         /// </summary>
-	    public string Id { get; set; }
+	    public string LucenePathName { get; set; }
 
 	    /// <summary>
 		/// Get or set the name of the index

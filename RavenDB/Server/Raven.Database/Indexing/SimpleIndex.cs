@@ -213,7 +213,7 @@ namespace Raven.Database.Indexing
 			}
 			else if (itemsInfo.DeletedKeys != null && directory is RAMDirectory == false)
 			{
-				context.IndexStorage.AddDeletedKeysToCommitPoints(name, itemsInfo.DeletedKeys);
+				context.IndexStorage.AddDeletedKeysToCommitPoints(indexDefinition, itemsInfo.DeletedKeys);
 			}
 		}
 

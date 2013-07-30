@@ -122,7 +122,7 @@ namespace Raven.Database.Indexing
 				try
 				{
 					luceneDirectory = OpenOrCreateLuceneDirectory(indexDefinition, createIfMissing: resetTried);
-					indexImplementation = CreateIndexImplementation(indexName, indexDefinition, luceneDirectory);
+					indexImplementation = CreateIndexImplementation(indexDefinition, luceneDirectory);
 
 					var simpleIndex = indexImplementation as SimpleIndex; // no need to do this on m/r indexes, since we rebuild them from saved data anyway
 					if (simpleIndex != null && keysToDeleteAfterRecovery != null)
@@ -185,8 +185,7 @@ namespace Raven.Database.Indexing
 					accessor.Indexing.AddIndex(indexName, indexDefinition.IsMapReduce);
 				});
 
-				var indexDirectory = indexName;
-				var indexFullPath = Path.Combine(path, MonoHttpUtility.UrlEncode(indexDirectory));
+			    var indexFullPath = Path.Combine(path, indexDefinition.LucenePathName);
 				IOExtensions.DeleteDirectory(indexFullPath);
 			}
 			catch (Exception exception)
@@ -213,7 +212,7 @@ namespace Raven.Database.Indexing
 			}
 			else
 			{
-				RegenerateMapReduceIndex(luceneDirectory, indexDefinition.Name, indexDefinition);
+				RegenerateMapReduceIndex(luceneDirectory, indexDefinition);
 			}
 			return keysToDeleteAfterRecovery;
 		}
@@ -248,10 +247,7 @@ namespace Raven.Database.Indexing
 		}
 
 
-		protected Lucene.Net.Store.Directory OpenOrCreateLuceneDirectory(
-			IndexDefinition indexDefinition,
-			string indexName = null,
-			bool createIfMissing = true)
+		protected Lucene.Net.Store.Directory OpenOrCreateLuceneDirectory(IndexDefinition indexDefinition, bool createIfMissing = true)
 		{
 			Lucene.Net.Store.Directory directory;
 			if (configuration.RunInMemory ||
@@ -263,8 +259,8 @@ namespace Raven.Database.Indexing
 			}
 			else
 			{
-				var indexDirectory = indexName ?? IndexDefinitionStorage.FixupIndexName(indexDefinition.Name, path);
-				var indexFullPath = Path.Combine(path, MonoHttpUtility.UrlEncode(indexDirectory));
+			    var indexDirectory = indexDefinition.LucenePathName;
+			    var indexFullPath = Path.Combine(path, indexDirectory);
 				directory = new LuceneCodecDirectory(indexFullPath, documentDatabase.IndexCodecs.OfType<AbstractIndexCodec>());
 
 				if (!IndexReader.IndexExists(directory))
@@ -279,7 +275,7 @@ namespace Raven.Database.Indexing
 				}
 				else
 				{
-					EnsureIndexVersionMatches(indexName, directory, indexDefinition);
+					EnsureIndexVersionMatches(directory, indexDefinition);
 					if (directory.FileExists("write.lock"))// force lock release, because it was still open when we shut down
 					{
 						IndexWriter.Unlock(directory);
@@ -291,7 +287,7 @@ namespace Raven.Database.Indexing
 						if (configuration.ResetIndexOnUncleanShutdown)
 							throw new InvalidOperationException("Rude shutdown detected on: " + indexDirectory);
 
-						CheckIndexAndTryToFix(directory, indexDirectory);
+						CheckIndexAndTryToFix(directory, indexDefinition);
 						directory.DeleteFile("writing-to-index.lock");
 					}
 				}
@@ -301,10 +297,10 @@ namespace Raven.Database.Indexing
 
 		}
 
-		private void RegenerateMapReduceIndex(Lucene.Net.Store.Directory directory, string indexName, IndexDefinition indexDefinition)
+		private void RegenerateMapReduceIndex(Lucene.Net.Store.Directory directory, IndexDefinition indexDefinition)
 		{
 			// remove old index data
-			var dirOnDisk = Path.Combine(path, MonoHttpUtility.UrlEncode(indexName));
+		    var dirOnDisk = Path.Combine(path, indexDefinition.LucenePathName);
 			IOExtensions.DeleteDirectory(dirOnDisk);
 
 			// initialize by new index
@@ -321,7 +317,7 @@ namespace Raven.Database.Indexing
 
 				do
 				{
-					reduceKeysAndTypes = actions.MapReduce.GetReduceKeysAndTypes(indexName, start, take).ToList();
+					reduceKeysAndTypes = actions.MapReduce.GetReduceKeysAndTypes(indexDefinition.Name, start, take).ToList();
 					start += take;
 
 					var keysToScheduleOnLevel2 =
@@ -334,7 +330,7 @@ namespace Raven.Database.Indexing
 
 					foreach (var reduceKey in keysToScheduleOnLevel0.Select(x => x.ReduceKey))
 					{
-						var mappedBuckets = actions.MapReduce.GetMappedBuckets(indexName, reduceKey).Distinct();
+						var mappedBuckets = actions.MapReduce.GetMappedBuckets(indexDefinition.Name, reduceKey).Distinct();
 
 						itemsToScheduleOnLevel0.AddRange(mappedBuckets.Select(x => new ReduceKeyAndBucket(x, reduceKey)));
 
@@ -343,13 +339,13 @@ namespace Raven.Database.Indexing
 
 					foreach (var itemToReduce in itemsToScheduleOnLevel2)
 					{
-						actions.MapReduce.ScheduleReductions(indexName, 2, itemToReduce);
+						actions.MapReduce.ScheduleReductions(indexDefinition.Name, 2, itemToReduce);
 						actions.General.MaybePulseTransaction();
 					}
 
 					foreach (var itemToReduce in itemsToScheduleOnLevel0)
 					{
-						actions.MapReduce.ScheduleReductions(indexName, 0, itemToReduce);
+						actions.MapReduce.ScheduleReductions(indexDefinition.Name, 0, itemToReduce);
 						actions.General.MaybePulseTransaction();
 					}
 
@@ -382,7 +378,7 @@ namespace Raven.Database.Indexing
 			}
 		}
 
-		private static void EnsureIndexVersionMatches(string indexName, Lucene.Net.Store.Directory directory, IndexDefinition indexDefinition)
+		private static void EnsureIndexVersionMatches(Lucene.Net.Store.Directory directory, IndexDefinition indexDefinition)
 		{
 			var indexVersion = "index.version";
 			var versionToCheck = IndexVersion;
@@ -393,20 +389,20 @@ namespace Raven.Database.Indexing
 			}
 			if (directory.FileExists(indexVersion) == false)
 			{
-				throw new InvalidOperationException("Could not find " + indexVersion + " " + indexName + ", resetting index");
+				throw new InvalidOperationException("Could not find " + indexVersion + " " + indexDefinition.Name + ", resetting index");
 			}
 			using (var indexInput = directory.OpenInput(indexVersion))
 			{
 				var versionFromDisk = indexInput.ReadString();
 				if (versionFromDisk != versionToCheck)
-					throw new InvalidOperationException("Index " + indexName + " is of version " + versionFromDisk +
+					throw new InvalidOperationException("Index " + indexDefinition.Name + " is of version " + versionFromDisk +
 														" which is not compatible with " + versionToCheck + ", resetting index");
 			}
 		}
 
-		private static void CheckIndexAndTryToFix(Lucene.Net.Store.Directory directory, string indexDirectory)
+		private static void CheckIndexAndTryToFix(Lucene.Net.Store.Directory directory, IndexDefinition indexDefinition)
 		{
-			startupLog.Warn("Unclean shutdown detected on {0}, checking the index for errors. This may take a while.", indexDirectory);
+			startupLog.Warn("Unclean shutdown detected on {0}, checking the index for errors. This may take a while.", indexDefinition.LucenePathName);
 
 			var memoryStream = new MemoryStream();
 			var stringWriter = new StreamWriter(memoryStream);
@@ -420,7 +416,7 @@ namespace Raven.Database.Indexing
 			sp.Stop();
 			if (startupLog.IsWarnEnabled)
 			{
-				startupLog.Warn("Checking index {0} took: {1}, clean: {2}", indexDirectory, sp.Elapsed, status.clean);
+				startupLog.Warn("Checking index {0} took: {1}, clean: {2}", indexDefinition.LucenePathName, sp.Elapsed, status.clean);
 				memoryStream.Position = 0;
 
 				log.Warn(new StreamReader(memoryStream).ReadToEnd());
@@ -429,10 +425,10 @@ namespace Raven.Database.Indexing
 			if (status.clean)
 				return;
 
-			startupLog.Warn("Attempting to fix index: {0}", indexDirectory);
+			startupLog.Warn("Attempting to fix index: {0}", indexDefinition.LucenePathName);
 			sp.Restart();
 			checkIndex.FixIndex(status);
-			startupLog.Warn("Fixed index {0} in {1}", indexDirectory, sp.Elapsed);
+			startupLog.Warn("Fixed index {0} in {1}", indexDefinition.LucenePathName, sp.Elapsed);
 		}
 
 		public void StoreCommitPoint(string indexName, IndexCommitPoint indexCommit)
@@ -480,13 +476,13 @@ namespace Raven.Database.Indexing
 			}
 		}
 
-		public void AddDeletedKeysToCommitPoints(string indexName, string[] deletedKeys)
+		public void AddDeletedKeysToCommitPoints(IndexDefinition indexDefinition, string[] deletedKeys)
 		{
-			var indexFullPath = Path.Combine(path, MonoHttpUtility.UrlEncode(indexName));
+			var indexFullPath = Path.Combine(path, indexDefinition.LucenePathName);
 
 			var existingCommitPoints = IndexCommitPointDirectory.ScanAllCommitPointsDirectory(indexFullPath);
 
-			foreach (var commitPointDirectory in existingCommitPoints.Select(commitPoint => new IndexCommitPointDirectory(path, indexName, commitPoint)))
+			foreach (var commitPointDirectory in existingCommitPoints.Select(commitPoint => new IndexCommitPointDirectory(path, indexDefinition.LucenePathName, commitPoint)))
 			{
 				using (var stream = File.Open(commitPointDirectory.DeletedKeysFile, FileMode.OpenOrCreate))
 				{
@@ -510,7 +506,7 @@ namespace Raven.Database.Indexing
 			if (indexDefinition.IsMapReduce)
 				return false;
 
-			var indexFullPath = Path.Combine(indexStoragePath, MonoHttpUtility.UrlEncode(indexDefinition.Name));
+		    var indexFullPath = Path.Combine(indexStoragePath, indexDefinition.LucenePathName);
 
 			var allCommitPointsFullPath = IndexCommitPointDirectory.GetAllCommitPointsFullPath(indexFullPath);
 
@@ -528,7 +524,7 @@ namespace Raven.Database.Indexing
 			{
 				try
 				{
-					var commitPointDirectory = new IndexCommitPointDirectory(indexStoragePath, indexDefinition.Name,
+					var commitPointDirectory = new IndexCommitPointDirectory(indexStoragePath, indexDefinition.LucenePathName,
 																				commitPointDirectoryName);
 
 					using (var commitPointFile = File.Open(commitPointDirectory.FileFullPath, FileMode.Open))
@@ -591,19 +587,19 @@ namespace Raven.Database.Indexing
 			return false;
 		}
 
-		internal Lucene.Net.Store.Directory MakeRAMDirectoryPhysical(RAMDirectory ramDir, string indexName)
+		internal Lucene.Net.Store.Directory MakeRAMDirectoryPhysical(RAMDirectory ramDir, IndexDefinition indexDefinition)
 		{
-			var newDir = new LuceneCodecDirectory(Path.Combine(path, MonoHttpUtility.UrlEncode(IndexDefinitionStorage.FixupIndexName(indexName, path))), documentDatabase.IndexCodecs.OfType<AbstractIndexCodec>());
+			var newDir = new LuceneCodecDirectory(Path.Combine(path, indexDefinition.LucenePathName), documentDatabase.IndexCodecs.OfType<AbstractIndexCodec>());
 			Lucene.Net.Store.Directory.Copy(ramDir, newDir, false);
 			return newDir;
 		}
 
-		private Index CreateIndexImplementation(string directoryPath, IndexDefinition indexDefinition, Lucene.Net.Store.Directory directory)
+		private Index CreateIndexImplementation(IndexDefinition indexDefinition, Lucene.Net.Store.Directory directory)
 		{
 			var viewGenerator = indexDefinitionStorage.GetViewGenerator(indexDefinition.Name);
 			var indexImplementation = indexDefinition.IsMapReduce
-										? (Index)new MapReduceIndex(directory, directoryPath, indexDefinition, viewGenerator, documentDatabase.WorkContext)
-										: new SimpleIndex(directory, directoryPath, indexDefinition, viewGenerator, documentDatabase.WorkContext);
+										? (Index)new MapReduceIndex(directory, indexDefinition.Name, indexDefinition, viewGenerator, documentDatabase.WorkContext)
+										: new SimpleIndex(directory, indexDefinition.Name, indexDefinition, viewGenerator, documentDatabase.WorkContext);
 
 			configuration.Container.SatisfyImportsOnce(indexImplementation);
 
@@ -650,7 +646,7 @@ namespace Raven.Database.Indexing
 			log.Debug("Deleting index {0}", name);
 			value.Dispose();
 			Index ignored;
-			var dirOnDisk = Path.Combine(path, MonoHttpUtility.UrlEncode(name));
+			var dirOnDisk = Path.Combine(path, value.LucenePathName);
 
 			documentDatabase.TransactionalStorage.Batch(accessor =>
 				accessor.Lists.Remove("Raven/Indexes/QueryTime", name));
@@ -663,16 +659,15 @@ namespace Raven.Database.Indexing
 
 		public void CreateIndexImplementation(IndexDefinition indexDefinition)
 		{
-			var encodedName = IndexDefinitionStorage.FixupIndexName(indexDefinition.Name, path);
-			log.Debug("Creating index {0} with encoded name {1}", indexDefinition.Name, encodedName);
+			log.Debug("Creating index {0} with id {1}", indexDefinition.Name, indexDefinition.LucenePathName);
 
 			IndexDefinitionStorage.ResolveAnalyzers(indexDefinition);
 			AssertAnalyzersValid(indexDefinition);
 
 			indexes.AddOrUpdate(indexDefinition.Name, n =>
 			{
-				var directory = OpenOrCreateLuceneDirectory(indexDefinition, encodedName);
-				return CreateIndexImplementation(encodedName, indexDefinition, directory);
+			    var directory = OpenOrCreateLuceneDirectory(indexDefinition);
+				return CreateIndexImplementation(indexDefinition, directory);
 			}, (s, index) => index);
 		}
 

@@ -82,6 +82,7 @@ namespace Raven.Database.Indexing
 		public TimeSpan LastIndexingDuration { get; set; }
 		public long TimePerDoc { get; set; }
 		public Task CurrentMapIndexingTask { get; set; }
+        public string LucenePathName { get { return indexDefinition.LucenePathName; } }
 
 		protected Index(Directory directory, string name, IndexDefinition indexDefinition, AbstractViewGenerator viewGenerator, WorkContext context)
 		{
@@ -489,7 +490,7 @@ namespace Raven.Database.Indexing
 			if (forceWriteToDisk || toobig || !stale)
 			{
 				indexWriter.Commit();
-				var fsDir = context.IndexStorage.MakeRAMDirectoryPhysical(dir, indexDefinition.Name);
+				var fsDir = context.IndexStorage.MakeRAMDirectoryPhysical(dir, indexDefinition);
 				IndexStorage.WriteIndexVersion(fsDir, indexDefinition);
 				directory = fsDir;
 
