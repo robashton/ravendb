@@ -1013,7 +1013,7 @@ namespace Raven.Database
 
                             CheckReferenceBecauseOfDocumentUpdate(key, actions);
 
-                            foreach (var indexName in IndexDefinitionStorage.Indexes)
+                            foreach (var indexName in IndexDefinitionStorage.IndexNames)
                             {
                                 AbstractViewGenerator abstractViewGenerator =
                                     IndexDefinitionStorage.GetViewGenerator(indexName);
@@ -1030,7 +1030,7 @@ namespace Raven.Database
                                         continue;
                                 }
 
-                                int indexNameCopy = indexName;
+                                string indexNameCopy = indexName;
                                 var task = actions.GetTask(x => x.Index == indexNameCopy, new RemoveFromIndexTask
                                 {
                                     Index = indexNameCopy
@@ -1170,7 +1170,7 @@ namespace Raven.Database
                     return name;
                 case IndexCreationOptions.Update:
                     // ensure that the code can compile
-                    new DynamicViewCompiler(definition.Name, definition, Extensions, IndexDefinitionStorage.IndexDefinitionsPath, Configuration).GenerateInstance();
+                    new DynamicViewCompiler(definition.PublicName, definition, Extensions, IndexDefinitionStorage.IndexDefinitionsPath, Configuration).GenerateInstance();
                     DeleteIndex(name);
                     break;
             }
@@ -1230,7 +1230,7 @@ namespace Raven.Database
 
         private IndexCreationOptions FindIndexCreationOptions(IndexDefinition definition, ref string name)
         {
-            definition.Name = name = IndexDefinitionStorage.FixupIndexName(name);
+            definition.PublicName = name = IndexDefinitionStorage.FixupIndexName(name);
             definition.RemoveDefaultValues();
             IndexDefinitionStorage.ResolveAnalyzers(definition);
             var findIndexCreationOptions = IndexDefinitionStorage.FindIndexCreationOptions(definition);

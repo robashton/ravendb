@@ -4,7 +4,7 @@ namespace Raven.Database.Indexing
 {
 	public class IndexToWorkOn
 	{
-		public int IndexName { get; set; }
+		public string IndexName { get; set; }
 		public Etag LastIndexedEtag { get; set; }
 
 		public Index Index { get; set; }

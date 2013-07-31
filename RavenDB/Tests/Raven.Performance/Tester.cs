@@ -196,7 +196,7 @@ select new
 
 				foreach (var staleIndex in statistics.StaleIndexes)
 				{
-					var indexStats = statistics.Indexes.Single(x => x.Name == staleIndex);
+					var indexStats = statistics.Indexes.Single(x => x.Name == staleIndex.ToString());
 					var latencyInTime = (DateTime.UtcNow - indexStats.LastIndexedTimestamp).TotalMilliseconds;
 					LatencyTimes.Add(new KeyValuePair<int, double>(staleIndex, latencyInTime));
 
@@ -218,13 +218,14 @@ select new
 			return Task.Factory.StartNew(AddData);
 		}
 
-		public IEnumerable<Tuple<string, IEnumerable<double>, IEnumerable<long>>> Latencies()
+		public IEnumerable<Tuple<int, IEnumerable<double>, IEnumerable<long>>> Latencies()
 		{
 			foreach (var item in LatencyTimes.GroupBy(x => x.Key))
 			{
 				yield return
-					Tuple.Create(item.Key, item.Select(x => x.Value),
-					             LatencyInDocuments.Where(pair => pair.Key == item.Key).Select(x => x.Value));
+					Tuple.Create(item.Key, 
+                        item.Select(x => x.Value),
+                         LatencyInDocuments.Where(pair => pair.Key == item.Key).Select(x => x.Value));
 			}
 		}
 	}

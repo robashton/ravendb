@@ -48,7 +48,7 @@ namespace Raven.Database.Storage
         private readonly ConcurrentDictionary<int, IndexDefinition> indexDefinitions =
             new ConcurrentDictionary<int, IndexDefinition>();
 
-        private readonly ConcurrentDictionary<string, IndexDefinition> newDefinitionsThisSession = new ConcurrentDictionary<string, IndexDefinition>();
+        private readonly ConcurrentDictionary<int, IndexDefinition> newDefinitionsThisSession = new ConcurrentDictionary<int, IndexDefinition>();
 
         private static readonly ILog logger = LogManager.GetCurrentClassLogger();
         private readonly string path;
@@ -159,7 +159,7 @@ namespace Raven.Database.Storage
 
         public string[] IndexNames
         {
-            get { return indexCache.Keys.OrderBy(name => name).ToArray(); }
+            get { return indexDefinitions.Values.OrderBy(x=>x.PublicName).Select(x=>x.PublicName).ToArray(); }
         }
 
 	    public int[] Indexes
@@ -174,7 +174,10 @@ namespace Raven.Database.Storage
 
         public string[] TransformerNames
         {
-            get { return transformDefinitions.Keys.OrderBy(name => name).ToArray(); }
+            get { return transformDefinitions.Values
+                .OrderBy(x => x.PublicName)
+                .Select(x=>x.PublicName)
+                .ToArray(); }
         }
 
         public string CreateAndPersistIndex(IndexDefinition indexDefinition)
@@ -219,7 +222,7 @@ namespace Raven.Database.Storage
 
         private DynamicViewCompiler AddAndCompileIndex(IndexDefinition indexDefinition)
         {
-            var transformer = new DynamicViewCompiler(indexDefinition.Name, indexDefinition, extensions, path, configuration);
+            var transformer = new DynamicViewCompiler(indexDefinition.PublicName, indexDefinition, extensions, path, configuration);
             var generator = transformer.GenerateInstance();
             indexCache.AddOrUpdate(indexDefinition.Name, generator, (s, viewGenerator) => generator);
 
@@ -230,7 +233,7 @@ namespace Raven.Database.Storage
 
         private DynamicTransformerCompiler AddAndCompileTransform(TransformerDefinition transformerDefinition)
         {
-            var transformer = new DynamicTransformerCompiler(transformerDefinition, configuration, extensions, transformerDefinition.Name, path);
+            var transformer = new DynamicTransformerCompiler(transformerDefinition, configuration, extensions, transformerDefinition.PublicName, path);
             var generator = transformer.GenerateInstance();
             transformCache.AddOrUpdate(transformerDefinition.Name, generator, (s, viewGenerator) => generator);
 
@@ -241,7 +244,7 @@ namespace Raven.Database.Storage
 
 		public void RegisterNewIndexInThisSession(string name, IndexDefinition definition)
 		{
-			newDefinitionsThisSession.TryAdd(name, definition);
+			newDefinitionsThisSession.TryAdd(definition.Name, definition);
 		}
 
         public void AddIndex(int id, IndexDefinition definition)

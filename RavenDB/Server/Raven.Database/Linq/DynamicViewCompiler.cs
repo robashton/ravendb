@@ -33,12 +33,12 @@ namespace Raven.Database.Linq
 		private readonly CaptureQueryParameterNamesVisitor captureQueryParameterNamesVisitorForMap = new CaptureQueryParameterNamesVisitor();
 		private readonly CaptureQueryParameterNamesVisitor captureQueryParameterNamesVisitorForReduce = new CaptureQueryParameterNamesVisitor();
 
-		public DynamicViewCompiler(int id, IndexDefinition indexDefinition, string basePath)
-			: this(id, indexDefinition, new OrderedPartCollection<AbstractDynamicCompilationExtension>(), basePath, new RavenConfiguration())
+		public DynamicViewCompiler(string name, IndexDefinition indexDefinition, string basePath)
+			: this(name, indexDefinition, new OrderedPartCollection<AbstractDynamicCompilationExtension>(), basePath, new RavenConfiguration())
 		{ }
 
-		public DynamicViewCompiler(int id, IndexDefinition indexDefinition, OrderedPartCollection<AbstractDynamicCompilationExtension> extensions, string basePath, InMemoryRavenConfiguration configuration)
-			:base(configuration, extensions, id, basePath)
+		public DynamicViewCompiler(string name, IndexDefinition indexDefinition, OrderedPartCollection<AbstractDynamicCompilationExtension> extensions, string basePath, InMemoryRavenConfiguration configuration)
+			:base(configuration, extensions, name, basePath)
 		{
 			this.indexDefinition = indexDefinition;
 			RequiresSelectNewAnonymousType = true;

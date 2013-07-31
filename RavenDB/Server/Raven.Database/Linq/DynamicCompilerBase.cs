@@ -15,19 +15,19 @@ namespace Raven.Database.Linq
 		protected OrderedPartCollection<AbstractDynamicCompilationExtension> extensions;
 		protected string basePath;
 		protected readonly InMemoryRavenConfiguration configuration;
-		protected int id;
+		protected string name;
 		public string CompiledQueryText { get; set; }
 		public Type GeneratedType { get; set; }
-		public int Name
+		public string Name
 		{
-          get { return id; }
+          get { return name; }
 		}
 		public string CSharpSafeName { get; set; }
 
-		public DynamicCompilerBase(InMemoryRavenConfiguration configuration, OrderedPartCollection<AbstractDynamicCompilationExtension> extensions, int id, string basePath)
+		public DynamicCompilerBase(InMemoryRavenConfiguration configuration, OrderedPartCollection<AbstractDynamicCompilationExtension> extensions, string name, string basePath)
 		{
 			this.configuration = configuration;
-			this.id = id;
+			this.name = name;
 			this.extensions = extensions;
 			if (configuration.RunInMemory == false)
 			{

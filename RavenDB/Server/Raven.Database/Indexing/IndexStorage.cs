@@ -611,6 +611,11 @@ namespace Raven.Database.Indexing
 			get { return indexes.Keys.ToArray(); }
 		}
 
+		public string[] IndexNames
+		{
+			get { return indexes.Values.Select(x=>x.PublicName).ToArray(); }
+		}
+
 		public bool HasIndex(string index)
 		{
 			if (index == null)
@@ -785,10 +790,10 @@ namespace Raven.Database.Indexing
 			});
 		}
 
-		public void RemoveFromIndex(int index, string[] keys, WorkContext context)
+		public void RemoveFromIndex(string index, string[] keys, WorkContext context)
 		{
-			Index value;
-			if (indexes.TryGetValue(index, out value) == false)
+			Index value = TryIndexByName(index);
+			if (value == null)
 			{
 				log.Debug("Removing from non existing index '{0}', ignoring", index);
 				return;
@@ -827,7 +832,7 @@ namespace Raven.Database.Indexing
 		}
 
 		public void Reduce(
-			int index,
+			string index,
 			AbstractViewGenerator viewGenerator,
 			IEnumerable<IGrouping<int, object>> mappedResults,
 			int level,
@@ -836,8 +841,8 @@ namespace Raven.Database.Indexing
 			HashSet<string> reduceKeys,
 			int inputCount)
 		{
-			Index value;
-			if (indexes.TryGetValue(index, out value) == false)
+		    Index value = TryIndexByName(index);
+			if (value == null)
 			{
 				log.Debug("Tried to index on a non existent index {0}, ignoring", index);
 				return;

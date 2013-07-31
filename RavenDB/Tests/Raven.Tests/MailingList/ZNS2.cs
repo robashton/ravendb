@@ -52,7 +52,7 @@ namespace Raven.Tests.MailingList
 				store.Initialize();
 				store.DatabaseCommands.PutIndex("TestItemsIndex", new Raven.Abstractions.Indexing.IndexDefinition
 				{
-					Name = "TestItemsIndex",
+					PublicName = "TestItemsIndex",
 					Map = @"from item in docs.TestItems
                         from d in item.Dates.Select((Func<dynamic,dynamic>)(x => x.Date)).Distinct().DefaultIfEmpty()
                         select new {Id = item.Id, Name = item.Name, EventDate = d, Area = item.Area};",
