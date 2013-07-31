@@ -180,13 +180,13 @@ namespace Raven.Studio.Models
 			OnEverythingChanged();
 		}
 
-		private void UpdatePriority(string name)
+		private void UpdatePriority(int id)
 		{
 			DatabaseCommands
 				.GetStatisticsAsync()
 				.ContinueOnSuccessInTheUIThread(databaseStatistics =>
 				{
-					var indexStats = databaseStatistics.Indexes.FirstOrDefault(stats => stats.Name == name);
+					var indexStats = databaseStatistics.Indexes.FirstOrDefault(stats => stats.Name == id.ToString());
 					if (indexStats == null)
 						return;
 					Priority = indexStats.Priority;
@@ -347,13 +347,13 @@ namespace Raven.Studio.Models
 
 		public string Name
 		{
-			get { return index.Name; }
+			get { return index.PublicName; }
 			set
 			{
-				if (index.Name != value)
+				if (index.PublicName != value)
 				{
-					MarkAsDirtyIfSignificant(index.Name, value);
-					index.Name = value;
+					MarkAsDirtyIfSignificant(index.PublicName, value);
+					index.PublicName = value;
 					OnPropertyChanged(() => Name);
 				}
 			}

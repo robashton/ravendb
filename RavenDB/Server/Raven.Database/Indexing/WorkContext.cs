@@ -169,7 +169,7 @@ namespace Raven.Database.Indexing
 			}
 		}
 
-		public void AddError(string index, string key, string error, string component)
+		public void AddError(int index, string key, string error, string component)
 		{
 			serverErrors.Enqueue(new ServerError
 			{

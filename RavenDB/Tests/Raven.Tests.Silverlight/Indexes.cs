@@ -97,7 +97,7 @@ namespace Raven.Tests.Silverlight
 				var task = documentStore.AsyncDatabaseCommands.ForDatabase(dbname).GetIndexesAsync(0, 25);
 				yield return task;
 
-				Assert.IsTrue(task.Result.Any(x => x.Name == "test"));
+				Assert.IsTrue(task.Result.Any(x => x.PublicName == "test"));
 			}
 		}
 

@@ -33,13 +33,13 @@ namespace Raven.Tests.Faceted
                             camera.DateOfListing,
                             camera.Megapixels
                         }",
-                    Name = "CameraCost"
+                    PublicName = "CameraCost"
                 };
             }
 
             public override string IndexName
             {
-                get { return new CameraCostIndex().CreateIndexDefinition().Name; }
+                get { return new CameraCostIndex().CreateIndexDefinition().PublicName; }
             }
         }
 

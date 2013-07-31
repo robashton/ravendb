@@ -15,19 +15,19 @@ namespace Raven.Database.Linq
 		protected OrderedPartCollection<AbstractDynamicCompilationExtension> extensions;
 		protected string basePath;
 		protected readonly InMemoryRavenConfiguration configuration;
-		protected string name;
+		protected int id;
 		public string CompiledQueryText { get; set; }
 		public Type GeneratedType { get; set; }
-		public string Name
+		public int Name
 		{
-			get { return name; }
+          get { return id; }
 		}
 		public string CSharpSafeName { get; set; }
 
-		public DynamicCompilerBase(InMemoryRavenConfiguration configuration, OrderedPartCollection<AbstractDynamicCompilationExtension> extensions, string name, string basePath)
+		public DynamicCompilerBase(InMemoryRavenConfiguration configuration, OrderedPartCollection<AbstractDynamicCompilationExtension> extensions, int id, string basePath)
 		{
 			this.configuration = configuration;
-			this.name = name;
+			this.id = id;
 			this.extensions = extensions;
 			if (configuration.RunInMemory == false)
 			{
@@ -35,7 +35,6 @@ namespace Raven.Database.Linq
 				if (Directory.Exists(this.basePath) == false)
 					Directory.CreateDirectory(this.basePath);
 			}
-			this.name = MonoHttpUtility.UrlEncode(name);
 		}
 	}
 }

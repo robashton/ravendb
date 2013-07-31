@@ -165,7 +165,6 @@ namespace Raven.Tests.Indexes
 			} while (docs.IsStale);
 
 			Assert.Equal("1", db.Statistics.Errors[0].Document);
-			Assert.Equal("pagesByTitle2", db.Statistics.Errors[0].Index);
 			Assert.Contains("Attempted to divide by zero.", db.Statistics.Errors[0].Error);
 		}
 	}

@@ -22,7 +22,7 @@ namespace Raven.Database.Linq
 
 		public DynamicTransformerCompiler(
 			TransformerDefinition transformerDefinition,
-			InMemoryRavenConfiguration configuration, OrderedPartCollection<AbstractDynamicCompilationExtension> extensions, string name, string basePath) : base(configuration, extensions, name, basePath)
+			InMemoryRavenConfiguration configuration, OrderedPartCollection<AbstractDynamicCompilationExtension> extensions, int name, string basePath) : base(configuration, extensions, name, basePath)
 		{
 			this.transformerDefinition = transformerDefinition;
 		}
@@ -45,7 +45,7 @@ namespace Raven.Database.Linq
 
 		    try
 		    {
-		        CSharpSafeName = "Transformer_" + Regex.Replace(Name, @"[^\w\d]", "_");
+		        CSharpSafeName = "Transformer_" + Name;
 		        var type = new TypeDeclaration
 		        {
 		            Modifiers = Modifiers.Public,

@@ -97,7 +97,7 @@ namespace Raven.Tests.Document
 				Indexes = { { x => x.Name, FieldIndexing.NotAnalyzed } }
 			});
 			var indexDefinitions = documentStore.DatabaseCommands.GetIndexes(0, 10);
-			Assert.NotNull(indexDefinitions.SingleOrDefault(d => d.Name == "Companies/Name"));
+			Assert.NotNull(indexDefinitions.SingleOrDefault(d => d.PublicName == "Companies/Name"));
 		}
 
 		[Fact]

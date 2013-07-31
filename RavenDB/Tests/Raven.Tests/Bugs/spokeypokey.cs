@@ -143,7 +143,7 @@ namespace Raven.Tests.Bugs
 				store.Conventions.FindIdentityProperty = (x => x.Name == "DocId");
 				store.DatabaseCommands.PutIndex("TestItemsIndex", new IndexDefinition
 				                                                  	{
-				                                                  		Name = "TestItemsIndex",
+				                                                  		PublicName = "TestItemsIndex",
 				                                                  		Map = "from item in docs.TestItems select new { DocId = item.__document_id, Name2 = item.Name, City = item.City };",
 																		TransformResults = "from item in results select new { DocId = item.__document_id, Name2 = item.Name, City = item.City };",
 				                                                  		Fields = new List<string> {"DocId", "Name", "City"}

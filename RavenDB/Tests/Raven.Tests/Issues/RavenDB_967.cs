@@ -77,7 +77,7 @@ namespace Raven.Tests.Issues
 
 					Assert.NotNull(transformers);
 					Assert.Equal(1, transformers.Length);
-					Assert.Equal("ProductWithQueryInput", transformers[0].Name);
+					Assert.Equal("ProductWithQueryInput", transformers[0].PublicName);
 				}
 			}
 			finally

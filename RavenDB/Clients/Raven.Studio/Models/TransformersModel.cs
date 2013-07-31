@@ -59,7 +59,7 @@ namespace Raven.Studio.Models
 			private void DeleteTransformer()
 			{
 				DatabaseCommands
-					.DeleteTransformerAsync(model.ItemSelection.Name)
+					.DeleteTransformerAsync(model.ItemSelection.PublicName)
 					.ContinueOnUIThread(t =>
 					{
 						if (t.IsFaulted)

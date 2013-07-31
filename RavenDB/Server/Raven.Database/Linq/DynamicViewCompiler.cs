@@ -33,12 +33,12 @@ namespace Raven.Database.Linq
 		private readonly CaptureQueryParameterNamesVisitor captureQueryParameterNamesVisitorForMap = new CaptureQueryParameterNamesVisitor();
 		private readonly CaptureQueryParameterNamesVisitor captureQueryParameterNamesVisitorForReduce = new CaptureQueryParameterNamesVisitor();
 
-		public DynamicViewCompiler(string name, IndexDefinition indexDefinition, string basePath)
-			: this(name, indexDefinition, new OrderedPartCollection<AbstractDynamicCompilationExtension>(), basePath, new RavenConfiguration())
+		public DynamicViewCompiler(int id, IndexDefinition indexDefinition, string basePath)
+			: this(id, indexDefinition, new OrderedPartCollection<AbstractDynamicCompilationExtension>(), basePath, new RavenConfiguration())
 		{ }
 
-		public DynamicViewCompiler(string name, IndexDefinition indexDefinition, OrderedPartCollection<AbstractDynamicCompilationExtension> extensions, string basePath, InMemoryRavenConfiguration configuration)
-			:base(configuration, extensions, name, basePath)
+		public DynamicViewCompiler(int id, IndexDefinition indexDefinition, OrderedPartCollection<AbstractDynamicCompilationExtension> extensions, string basePath, InMemoryRavenConfiguration configuration)
+			:base(configuration, extensions, id, basePath)
 		{
 			this.indexDefinition = indexDefinition;
 			RequiresSelectNewAnonymousType = true;
@@ -49,7 +49,7 @@ namespace Raven.Database.Linq
 		private void TransformQueryToClass()
 		{
 
-			CSharpSafeName = "Index_" + Regex.Replace(Name, @"[^\w\d]", "_");
+		    CSharpSafeName = "Index_" + Name;
 			var type = new TypeDeclaration
 			{
 				Modifiers = Modifiers.Public,

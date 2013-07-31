@@ -426,7 +426,7 @@ namespace Raven.Database.Indexing
 					Log.Debug("All documents have been filtered for {0}, no indexing will be performed, updating to {1}, {2}", indexName,
 							  lastEtag, lastModified);
 					// we use it this way to batch all the updates together
-					actions[i] = accessor => accessor.Indexing.UpdateLastIndexed(indexName, lastEtag, lastModified);
+					actions[i] = accessor => accessor.Indexing.UpdateLastIndexed(indexName.ToString(), lastEtag, lastModified);
 					return;
 				}
 				if (Log.IsDebugEnabled)
@@ -480,7 +480,8 @@ namespace Raven.Database.Indexing
 				}
 				context.CancellationToken.ThrowIfCancellationRequested();
 
-				context.IndexStorage.Index(index, viewGenerator, batch, context, actions, batch.DateTime ?? DateTime.MinValue);
+			    var instance = context.IndexStorage.GetIndexInstance(index);
+				context.IndexStorage.Index(instance.name, viewGenerator, batch, context, actions, batch.DateTime ?? DateTime.MinValue);
 			}
 			catch (OperationCanceledException)
 			{

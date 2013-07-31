@@ -393,7 +393,7 @@ namespace Raven.Studio.Models
 		    ApplicationModel.DatabaseCommands.GetTransformersAsync(0, 256).ContinueOnSuccessInTheUIThread(transformers =>
 		    {
                 Transformers = new List<string>{"None"};
-			    Transformers.AddRange(transformers.Select(definition => definition.Name));
+			    Transformers.AddRange(transformers.Select(definition => definition.PublicName));
 			    
 			    OnPropertyChanged(() => Transformers);
 		    });

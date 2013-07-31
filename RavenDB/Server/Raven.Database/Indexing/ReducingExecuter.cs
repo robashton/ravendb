@@ -34,7 +34,7 @@ namespace Raven.Database.Indexing
 			IList<ReduceTypePerKey> mappedResultsInfo = null;
 			transactionalStorage.Batch(actions =>
 			{
-				mappedResultsInfo = actions.MapReduce.GetReduceTypesPerKeys(indexToWorkOn.IndexName,
+				mappedResultsInfo = actions.MapReduce.GetReduceTypesPerKeys(indexToWorkOn.IndexName.ToString(),
 					context.CurrentNumberOfItemsToReduceInSingleBatch,
 					context.NumberOfItemsToExecuteReduceInSingleStep).ToList();
 			});
@@ -70,7 +70,7 @@ namespace Raven.Database.Indexing
 
 						if (latest == null)
 							return;
-						actions.Indexing.UpdateLastReduced(indexToWorkOn.IndexName, latest.Etag, latest.Timestamp);
+						actions.Indexing.UpdateLastReduced(indexToWorkOn.IndexName.ToString(), latest.Etag, latest.Timestamp);
 					});
 				}
 			}
@@ -83,7 +83,7 @@ namespace Raven.Database.Indexing
 			{
 				foreach (var localReduceKey in keysToReduce)
 				{
-					var lastPerformedReduceType = actions.MapReduce.GetLastPerformedReduceType(index.IndexName, localReduceKey);
+					var lastPerformedReduceType = actions.MapReduce.GetLastPerformedReduceType(index.IndexName.ToString(), localReduceKey);
 
 					if (lastPerformedReduceType != ReduceType.MultiStep)
 						needToMoveToMultiStep.Add(localReduceKey);
@@ -92,10 +92,10 @@ namespace Raven.Database.Indexing
 						continue;
 					// we exceeded the limit of items to reduce in single step
 					// now we need to schedule reductions at level 0 for all map results with given reduce key
-					var mappedItems = actions.MapReduce.GetMappedBuckets(index.IndexName, localReduceKey).ToList();
+					var mappedItems = actions.MapReduce.GetMappedBuckets(index.IndexName.ToString(), localReduceKey).ToList();
 					foreach (var result in mappedItems.Select(x => new ReduceKeyAndBucket(x, localReduceKey)))
 					{
-						actions.MapReduce.ScheduleReductions(index.IndexName, 0, result);
+						actions.MapReduce.ScheduleReductions(index.IndexName.ToString(), 0, result);
 					}
 				}
 			});
@@ -105,7 +105,7 @@ namespace Raven.Database.Indexing
 				var level = i;
 
 				var reduceParams = new GetItemsToReduceParams(
-					index.IndexName,
+					index.IndexName.ToString(),
 					keysToReduce,
 					level,
 					true,
@@ -150,7 +150,7 @@ namespace Raven.Database.Indexing
 																	 .ToArray();
 						foreach (var mappedResultInfo in requiredReduceNextTime)
 						{
-							actions.MapReduce.RemoveReduceResults(index.IndexName, level + 1, mappedResultInfo.ReduceKey,
+							actions.MapReduce.RemoveReduceResults(index.IndexName.ToString(), level + 1, mappedResultInfo.ReduceKey,
 																  mappedResultInfo.Bucket);
 						}
 
@@ -162,7 +162,7 @@ namespace Raven.Database.Indexing
 								.ToArray();
 							foreach (var reduceKeysAndBucket in reduceKeysAndBuckets)
 							{
-								actions.MapReduce.ScheduleReductions(index.IndexName, level + 1, reduceKeysAndBucket);
+								actions.MapReduce.ScheduleReductions(index.IndexName.ToString(), level + 1, reduceKeysAndBucket);
 							}
 						}
 
@@ -192,7 +192,7 @@ namespace Raven.Database.Indexing
 			{
 				string localReduceKey = reduceKey;
 				transactionalStorage.Batch(actions =>
-										   actions.MapReduce.UpdatePerformedReduceType(index.IndexName, localReduceKey,
+										   actions.MapReduce.UpdatePerformedReduceType(index.IndexName.ToString(), localReduceKey,
 																					   ReduceType.MultiStep));
 			}
 		}
@@ -216,7 +216,7 @@ namespace Raven.Database.Indexing
 				}
 				transactionalStorage.Batch(actions =>
 				{
-					var getItemsToReduceParams = new GetItemsToReduceParams(index: index.IndexName, reduceKeys: localKeys, level: 0,
+					var getItemsToReduceParams = new GetItemsToReduceParams(index: index.IndexName.ToString(), reduceKeys: localKeys, level: 0,
 																			loadData: false,
 																			itemsToDelete: itemsToDelete)
 					{
@@ -238,14 +238,14 @@ namespace Raven.Database.Indexing
 						// In order to avoid that, we forcibly delete those extra items from the scheduled reductions, and move on
 						foreach (var reduceKey in keysToReduce)
 						{
-							actions.MapReduce.DeleteScheduledReduction(index.IndexName, 1, reduceKey);
-							actions.MapReduce.DeleteScheduledReduction(index.IndexName, 2, reduceKey);
+							actions.MapReduce.DeleteScheduledReduction(index.IndexName.ToString(), 1, reduceKey);
+							actions.MapReduce.DeleteScheduledReduction(index.IndexName.ToString(), 2, reduceKey);
 						}
 					}
 
 					foreach (var reduceKey in localKeys)
 					{
-						var lastPerformedReduceType = actions.MapReduce.GetLastPerformedReduceType(index.IndexName, reduceKey);
+						var lastPerformedReduceType = actions.MapReduce.GetLastPerformedReduceType(index.IndexName.ToString(), reduceKey);
 
 						if (lastPerformedReduceType != ReduceType.SingleStep)
 							needToMoveToSingleStep.Add(reduceKey);
@@ -257,20 +257,20 @@ namespace Raven.Database.Indexing
 							reduceKey);
 
 						// now we are in single step but previously multi step reduce was performed for the given key
-						var mappedBuckets = actions.MapReduce.GetMappedBuckets(index.IndexName, reduceKey).ToList();
+						var mappedBuckets = actions.MapReduce.GetMappedBuckets(index.IndexName.ToString(), reduceKey).ToList();
 
 						// add scheduled items too to be sure we will delete reduce results of already deleted documents
 						mappedBuckets.AddRange(scheduledItems.Select(x => x.Bucket));
 
 						foreach (var mappedBucket in mappedBuckets.Distinct())
 						{
-							actions.MapReduce.RemoveReduceResults(index.IndexName, 1, reduceKey, mappedBucket);
-							actions.MapReduce.RemoveReduceResults(index.IndexName, 2, reduceKey, mappedBucket / 1024);
+							actions.MapReduce.RemoveReduceResults(index.IndexName.ToString(), 1, reduceKey, mappedBucket);
+							actions.MapReduce.RemoveReduceResults(index.IndexName.ToString(), 2, reduceKey, mappedBucket / 1024);
 						}
 					}
 
 					var mappedResults = actions.MapReduce.GetMappedResults(
-							index.IndexName,
+							index.IndexName.ToString(),
 							localKeys,
 							loadData: true
 						).ToList();
@@ -302,7 +302,7 @@ namespace Raven.Database.Indexing
 			{
 				string localReduceKey = reduceKey;
 				transactionalStorage.Batch(actions =>
-					actions.MapReduce.UpdatePerformedReduceType(index.IndexName, localReduceKey, ReduceType.SingleStep));
+					actions.MapReduce.UpdatePerformedReduceType(index.IndexName.ToString(), localReduceKey, ReduceType.SingleStep));
 			}
 		}
 

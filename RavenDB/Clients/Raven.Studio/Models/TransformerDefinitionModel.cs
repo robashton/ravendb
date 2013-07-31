@@ -142,7 +142,7 @@ namespace Raven.Studio.Models
 			{
 			    transformer.ClearDefinitionErrors();
 
-				if (string.IsNullOrWhiteSpace(transformer.Transformer.Name))
+				if (string.IsNullOrWhiteSpace(transformer.Transformer.PublicName))
 				{
 					transformer.ReportDefinitionError("Transformer must have a name");
 					return;
@@ -154,7 +154,7 @@ namespace Raven.Studio.Models
                     return;
                 }
 
-				if (transformer.IsNewTransformer == false && transformer.OriginalName != transformer.Transformer.Name)
+				if (transformer.IsNewTransformer == false && transformer.OriginalName != transformer.Transformer.PublicName)
 				{
 					if (AskUser.Confirmation("Can not rename and transformer",
 											 "If you wish to save a new transformer with this new name press OK, to cancel the save command press Cancel") == false)
@@ -165,12 +165,12 @@ namespace Raven.Studio.Models
 				}
 
 				ApplicationModel.Current.AddNotification(new Notification("saving transformer " + transformer.Transformer.Name));
-				DatabaseCommands.PutTransformerAsync(transformer.Transformer.Name, transformer.Transformer)
+				DatabaseCommands.PutTransformerAsync(transformer.Transformer.PublicName, transformer.Transformer)
 					.ContinueOnSuccess(() =>
 					{
 						ApplicationModel.Current.AddNotification(
 							new Notification("transformer " + transformer.Transformer.Name + " saved"));
-						PutTransformerNameInUrl(transformer.Transformer.Name);
+						PutTransformerNameInUrl(transformer.Transformer.PublicName);
 
 					    transformer.IsShowingErrors = false;
 					})
@@ -213,7 +213,7 @@ namespace Raven.Studio.Models
 			private void DeleteTransformer()
 			{
 				DatabaseCommands
-					.DeleteTransformerAsync(model.Transformer.Name)
+					.DeleteTransformerAsync(model.Transformer.PublicName)
 					.ContinueOnUIThread(t =>
 					{
 						if (t.IsFaulted)

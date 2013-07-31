@@ -20,7 +20,6 @@ namespace Raven.Abstractions.Indexing
 		/// </summary>
 		public IndexDefinition() 
         {
-		    LucenePathName = String.Empty;
 			Maps = new HashSet<string>();
 			Indexes = new Dictionary<string, FieldIndexing>();
 			Stores = new Dictionary<string, FieldStorage>();
@@ -32,15 +31,15 @@ namespace Raven.Abstractions.Indexing
 			SpatialIndexes = new Dictionary<string, SpatialOptions>();
 		}
 
-        /// <summary>
-        /// Gets or sets the id of this index definition
-        /// </summary>
-	    public string LucenePathName { get; set; }
-
 	    /// <summary>
-		/// Get or set the name of the index
+		/// Get or set the id of this index
 		/// </summary>
-		public string Name { get; set; }
+		public int Name { get; set; }
+
+        /// <summary>
+        /// This is the means by which the outside world refers to this index defiintion
+        /// </summary>
+        public string PublicName { get; set; }
 
 		/// <summary>
 		/// Get or set the index lock mode
@@ -255,7 +254,7 @@ namespace Raven.Abstractions.Indexing
 		{
 			get
 			{
-				var name = Name ?? string.Empty;
+				var name = PublicName ?? string.Empty;
 				if (name.StartsWith("Auto/", StringComparison.OrdinalIgnoreCase))
 					return "Auto";
 				if (IsCompiled)
@@ -300,7 +299,7 @@ namespace Raven.Abstractions.Indexing
 
 		public override string ToString()
 		{
-			return Name ?? Map;
+			return PublicName ?? Map;
 		}
 
 		public IndexDefinition Clone()
@@ -348,9 +347,10 @@ namespace Raven.Abstractions.Indexing
 		/// Gets or sets the translator function
 		/// </summary>
 		public string TransformResults { get; set; }
-		public string Name { get; set; }
+		public int Name { get; set; }
+	    public string PublicName { get; set; }
 
-		public bool Equals(TransformerDefinition other)
+	    public bool Equals(TransformerDefinition other)
 		{
 			return string.Equals(TransformResults, other.TransformResults);
 		}
@@ -375,7 +375,7 @@ namespace Raven.Abstractions.Indexing
 
 		public override string ToString()
 		{
-			return Name ?? TransformResults;
+			return TransformResults;
 		}
 	}
 }

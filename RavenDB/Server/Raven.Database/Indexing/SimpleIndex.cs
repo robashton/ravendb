@@ -26,8 +26,8 @@ namespace Raven.Database.Indexing
 {
 	public class SimpleIndex : Index
 	{
-		public SimpleIndex(Directory directory, string name, IndexDefinition indexDefinition, AbstractViewGenerator viewGenerator, WorkContext context)
-			: base(directory, name, indexDefinition, viewGenerator, context)
+		public SimpleIndex(Directory directory, int id, IndexDefinition indexDefinition, AbstractViewGenerator viewGenerator, WorkContext context)
+			: base(directory, id, indexDefinition, viewGenerator, context)
 		{
 		}
 
@@ -142,7 +142,7 @@ namespace Raven.Database.Indexing
 					{
 						foreach (var referencedDocument in result)
 						{
-							actions.Indexing.UpdateDocumentReferences(name, referencedDocument.Key, referencedDocument.Value);
+							actions.Indexing.UpdateDocumentReferences(name.ToString(), referencedDocument.Key, referencedDocument.Value);
 						}
 					}
 
@@ -202,7 +202,7 @@ namespace Raven.Database.Indexing
 		{
 			if (ShouldStoreCommitPoint() && itemsInfo.HighestETag != null)
 			{
-				context.IndexStorage.StoreCommitPoint(name, new IndexCommitPoint
+				context.IndexStorage.StoreCommitPoint(name.ToString(), new IndexCommitPoint
 				{
 					HighestCommitedETag = itemsInfo.HighestETag,
 					TimeStamp = LastIndexTime,
@@ -346,7 +346,7 @@ namespace Raven.Database.Indexing
 					batcher => batcher.Dispose());
 
 				IndexStats currentIndexStats = null;
-				context.TransactionalStorage.Batch(accessor => currentIndexStats = accessor.Indexing.GetIndexStats(name));
+				context.TransactionalStorage.Batch(accessor => currentIndexStats = accessor.Indexing.GetIndexStats(name.ToString()));
 
 				return new IndexedItemsInfo
 				{

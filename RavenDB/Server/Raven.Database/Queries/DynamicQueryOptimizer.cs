@@ -38,11 +38,11 @@ namespace Raven.Database.Queries
 			this.database = database;
 		}
 
-		private delegate void ExplainDelegate(string index, Func<string> rejectionReasonGenerator);
+		private delegate void ExplainDelegate(int index, Func<string> rejectionReasonGenerator);
 
 		public class Explanation
 		{
-			public string Index { get; set; }
+			public int Index { get; set; }
 			public string Reason { get; set; }
 		}
 
@@ -57,7 +57,7 @@ namespace Raven.Database.Queries
 			// We decline to suggest an index here and choose to use the default index created for this
 			// sort of query, which is what we would have to choose anyway.
 			if (indexQuery.AggregationOperation != AggregationOperation.None)
-				return new DynamicQueryOptimizerResult("", DynamicQueryMatchType.Failure);
+				return new DynamicQueryOptimizerResult(-1, DynamicQueryMatchType.Failure);
 
 			if (string.IsNullOrEmpty(indexQuery.Query) && // we optimize for empty queries to use Raven/DocumentsByEntityName
 			    (indexQuery.SortedFields == null || indexQuery.SortedFields.Length == 0) && // and no sorting was requested
@@ -95,7 +95,7 @@ namespace Raven.Database.Queries
 			// there is no reason why we can't use indexes with transform results
 			// we merely need to disable the transform results for this particular query
 			indexQuery.SkipTransformResults = true;
-			var results = database.IndexDefinitionStorage.IndexNames
+			var results = database.IndexDefinitionStorage.Indexes
 					.Select(indexName =>
 					{
 						var abstractViewGenerator = database.IndexDefinitionStorage.GetViewGenerator(indexName);
@@ -303,7 +303,7 @@ namespace Raven.Database.Queries
 		        {
 			        prioritizedResults = optimizerResults.OrderByDescending(result =>
 			        {
-				        var stats = accessor.Indexing.GetIndexStats(result.IndexName);
+				        var stats = accessor.Indexing.GetIndexStats(result.IndexName.ToString());
 				        if (stats == null)
 							return Etag.Empty;
 
@@ -312,8 +312,7 @@ namespace Raven.Database.Queries
 				        .ThenByDescending(result =>
 				        {
 					        var abstractViewGenerator =
-						        database.IndexDefinitionStorage.GetViewGenerator(
-							        result.IndexName);
+						        database.IndexDefinitionStorage.GetViewGenerator(result.IndexName);
 					        if (abstractViewGenerator == null)
 						        return -1;
 					        return abstractViewGenerator.CountOfFields;
@@ -340,7 +339,7 @@ namespace Raven.Database.Queries
                 }).First();
             }
 
-            return new DynamicQueryOptimizerResult("<invalid index>", DynamicQueryMatchType.Failure);
+            return new DynamicQueryOptimizerResult(-1, DynamicQueryMatchType.Failure);
 
 		}
 	}

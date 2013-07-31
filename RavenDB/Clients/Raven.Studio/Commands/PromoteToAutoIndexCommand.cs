@@ -50,7 +50,7 @@ namespace Raven.Studio.Commands
 				.GetIndexAsync(oldIndexName)
 				.ContinueOnSuccess(index =>
 				{
-					index.Name = newIndexName;
+					index.PublicName = newIndexName;
 					DatabaseCommands.PutIndexAsync(newIndexName, index, false)
 					                .ContinueOnSuccess(() => DatabaseCommands.DeleteIndexAsync(oldIndexName))
 					                .ContinueOnSuccessInTheUIThread(() =>
