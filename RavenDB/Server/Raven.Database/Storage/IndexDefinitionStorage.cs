@@ -72,52 +72,12 @@ namespace Raven.Database.Storage
             if (configuration.RunInMemory == false)
                 ReadFromDisk();
 
-            //compiled view generators always overwrite dynamic views
-            ReadIndexesFromCatalog(compiledGenerators, transactionalStorage);
-
             newDefinitionsThisSession.Clear();
         }
 
         public bool IsNewThisSession(IndexDefinition definition)
         {
             return newDefinitionsThisSession.ContainsKey(definition.IndexId);
-        }
-
-        private void ReadIndexesFromCatalog(IEnumerable<AbstractViewGenerator> compiledGenerators, ITransactionalStorage transactionalStorage)
-        {
-            foreach (var generator in compiledGenerators)
-            {
-                var copy = generator;
-                var displayNameAtt = TypeDescriptor.GetAttributes(copy)
-                    .OfType<DisplayNameAttribute>()
-                    .FirstOrDefault();
-
-                var name = displayNameAtt != null ? displayNameAtt.DisplayName : copy.GetType().Name;
-
-                transactionalStorage.Batch(actions =>
-                {
-                    if (actions.Indexing.GetIndexesStats().Any(x => x.Name == name))
-                        return;
-
-                    actions.Indexing.AddIndex(name, copy.ReduceDefinition != null);
-                });
-
-                var indexDefinition = new IndexDefinition
-                {
-                    PublicName = name,
-                    Map = "Compiled map function: " + generator.GetType().AssemblyQualifiedName,
-                    // need to supply this so the index storage will create map/reduce index
-                    Reduce = generator.ReduceDefinition == null ? null : "Compiled reduce function: " + generator.GetType().AssemblyQualifiedName,
-                    Indexes = generator.Indexes,
-                    Stores = generator.Stores,
-                    TermVectors = generator.TermVectors,
-                    SpatialIndexes = generator.SpatialIndexes,
-                    IsCompiled = true
-                };
-                throw new NotImplementedException("Needs an id here");
-                indexCache.AddOrUpdate(indexDefinition.IndexId, copy, (s, viewGenerator) => copy);
-                indexDefinitions.AddOrUpdate(indexDefinition.IndexId, indexDefinition, (s1, definition) => indexDefinition);
-            }
         }
 
         private void ReadFromDisk()
@@ -419,8 +379,7 @@ namespace Raven.Database.Storage
 
         public AbstractTransformer GetTransformer(string name)
         {
-            return
-                transformCache.Values.FirstOrDefault(x => String.Compare(x.Name, name, StringComparison.OrdinalIgnoreCase) == 0);
+            return transformCache.Values.FirstOrDefault(x => String.Compare(x.Name, name, StringComparison.OrdinalIgnoreCase) == 0);
         }
     }
 }
