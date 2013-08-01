@@ -47,10 +47,10 @@ namespace Raven.Storage.Managed
 		{
 			using (storage.ReadLock())
 			{
-				var readResult = storage.IndexingStats.Read(new RavenJObject { { "index", index } });
+				var readResult = storage.IndexingStats.Read(new RavenJObject { { "index", index.ToString() } });
 				if (readResult == null)
 					return null;
-				Table.ReadResult lastIndexedEtagReadResult = storage.LastIndexedEtags.Read(new RavenJObject { { "index", index } });
+				Table.ReadResult lastIndexedEtagReadResult = storage.LastIndexedEtags.Read(new RavenJObject { { "index", index.ToString() } });
 				return GetIndexStats(readResult, lastIndexedEtagReadResult);
 			}
 		}
@@ -84,7 +84,7 @@ namespace Raven.Storage.Managed
 		{
 			using (storage.WriteLock())
 			{
-				var readResult = storage.IndexingStats.Read(name);
+				var readResult = storage.IndexingStats.Read(name.ToString());
 				if (readResult != null)
 					throw new ArgumentException(string.Format("There is already an index with the name: '{0}'", name));
 
@@ -116,7 +116,7 @@ namespace Raven.Storage.Managed
 
 		private RavenJObject GetCurrentIndex(int index)
 		{
-			var readResult = storage.IndexingStats.Read(index);
+			var readResult = storage.IndexingStats.Read(index.ToString());
 			if (readResult == null)
 				throw new ArgumentException(string.Format("There is no index with the name: '{0}'", index));
 			var key = (RavenJObject)readResult.Key;
@@ -223,7 +223,7 @@ namespace Raven.Storage.Managed
 
 	    public IndexFailureInformation GetFailureRate(int index)
 		{
-			var readResult = storage.IndexingStats.Read(index);
+			var readResult = storage.IndexingStats.Read(index.ToString());
 			if (readResult == null)
 				throw new IndexDoesNotExistsException("There is no index named: " + index);
 			var indexFailureInformation = new IndexFailureInformation
@@ -241,7 +241,7 @@ namespace Raven.Storage.Managed
 
 		public void TouchIndexEtag(int index)
 		{
-			var readResult = storage.IndexingStats.Read(index);
+			var readResult = storage.IndexingStats.Read(index.ToString());
 			if (readResult == null)
 				throw new ArgumentException(string.Format("There is no index with the name: '{0}'", index));
 			var key = (RavenJObject)readResult.Key.CloneToken();
@@ -251,7 +251,7 @@ namespace Raven.Storage.Managed
 
 		public void SetIndexPriority(int index, IndexingPriority priority)
         {
-            var readResult = storage.IndexingStats.Read(index);
+            var readResult = storage.IndexingStats.Read(index.ToString());
             if (readResult == null)
                 throw new ArgumentException(string.Format("There is no index with the name: '{0}'", index));
             var key = (RavenJObject)readResult.Key.CloneToken();
@@ -269,7 +269,7 @@ namespace Raven.Storage.Managed
 
 				while (!updateOperationStatus)
 				{
-					var readResult = storage.LastIndexedEtags.Read(index);
+					var readResult = storage.LastIndexedEtags.Read(index.ToString());
 					if (readResult == null)
 						throw new ArgumentException("There is no index with the name: " + index);
 
@@ -302,7 +302,7 @@ namespace Raven.Storage.Managed
 		{
 			using (storage.WriteLock())
 			{
-				var readResult = storage.IndexingStats.Read(index);
+				var readResult = storage.IndexingStats.Read(index.ToString());
 				if (readResult == null)
 					throw new ArgumentException(string.Format("There is no index with the name: '{0}'", index));
 

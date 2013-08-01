@@ -27,8 +27,8 @@ namespace Raven.Storage.Managed
 
 		public bool IsIndexStale(int view, DateTime? cutOff, Etag cutoffEtag)
 		{
-			var indexingStatsReadResult = storage.IndexingStats.Read(view);
-			var lastIndexedEtagsReadResult = storage.LastIndexedEtags.Read(view);
+			var indexingStatsReadResult = storage.IndexingStats.Read(view.ToString());
+			var lastIndexedEtagsReadResult = storage.LastIndexedEtags.Read(view.ToString());
 
 			if (indexingStatsReadResult == null)
 				return false;// index does not exists
@@ -78,7 +78,7 @@ namespace Raven.Storage.Managed
 
 		public bool IsMapStale(int view)
 		{
-			var readResult = storage.LastIndexedEtags.Read(view);
+			var readResult = storage.LastIndexedEtags.Read(view.ToString());
 
 			if (readResult == null)
 				return false;
@@ -97,12 +97,12 @@ namespace Raven.Storage.Managed
 
 		public Tuple<DateTime, Etag> IndexLastUpdatedAt(int view)
 		{
-			var indexingStatsReadResult = storage.IndexingStats.Read(view);
+			var indexingStatsReadResult = storage.IndexingStats.Read(view.ToString());
 
 			if (indexingStatsReadResult == null)
 				throw new IndexDoesNotExistsException("Could not find index named: " + view);
 
-			var lastIndexedEtagReadResult = storage.LastIndexedEtags.Read(view);
+			var lastIndexedEtagReadResult = storage.LastIndexedEtags.Read(view.ToString());
 
 			if (indexingStatsReadResult.Key.Value<object>("lastReducedTimestamp") != null)
 			{
@@ -118,7 +118,7 @@ namespace Raven.Storage.Managed
 
 		public int GetIndexTouchCount(int view)
 		{
-			var readResult = storage.IndexingStats.Read(view);
+			var readResult = storage.IndexingStats.Read(view.ToString());
 
 			if (readResult == null)
 				throw new IndexDoesNotExistsException("Could not find index named: " + view);

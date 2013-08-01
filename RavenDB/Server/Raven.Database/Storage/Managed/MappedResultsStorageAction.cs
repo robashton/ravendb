@@ -410,7 +410,7 @@ namespace Raven.Storage.Managed
 
 		public void UpdatePerformedReduceType(int view, string reduceKey, ReduceType reduceType)
 		{
-			var readResult = storage.ReduceKeys.Read(new RavenJObject { { "view", view }, { "reduceKey", reduceKey } });
+			var readResult = storage.ReduceKeys.Read(new RavenJObject { { "view", view.ToString() }, { "reduceKey", reduceKey } });
 
 			if (readResult == null)
 			{
@@ -431,7 +431,7 @@ namespace Raven.Storage.Managed
 
 		public ReduceType GetLastPerformedReduceType(int view, string reduceKey)
 		{
-			var readResult = storage.ReduceKeys.Read(new RavenJObject { { "view", view }, { "reduceKey", reduceKey } });
+			var readResult = storage.ReduceKeys.Read(new RavenJObject { { "view", view.ToString() }, { "reduceKey", reduceKey } });
 
 			if (readResult == null)
 				return ReduceType.None;
@@ -589,7 +589,7 @@ namespace Raven.Storage.Managed
 
 		public void IncrementReduceKeyCounter(int view, string reduceKey, int value)
 		{
-			var readResult = storage.ReduceKeys.Read(new RavenJObject { { "view", view }, { "reduceKey", reduceKey } });
+			var readResult = storage.ReduceKeys.Read(new RavenJObject { { "view", view.ToString() }, { "reduceKey", reduceKey } });
 
 			if (readResult == null)
 			{
@@ -622,7 +622,7 @@ namespace Raven.Storage.Managed
 
 		private int GetNumberOfMappedItemsPerReduceKey(int view, string reduceKey)
 		{
-			var readResult = storage.ReduceKeys.Read(new RavenJObject { { "view", view }, { "reduceKey", reduceKey } });
+			var readResult = storage.ReduceKeys.Read(new RavenJObject { { "view", view.ToString() }, { "reduceKey", reduceKey } });
 
 			if (readResult == null)
 				return 0;
