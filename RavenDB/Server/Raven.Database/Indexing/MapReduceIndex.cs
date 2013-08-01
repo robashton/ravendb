@@ -89,7 +89,7 @@ namespace Raven.Database.Indexing
 			{
 				sourceCount++;
 				var documentId = doc.__document_id;
-				actions.MapReduce.DeleteMappedResultsForDocumentId((string)documentId, indexId.ToString(), deleted);
+				actions.MapReduce.DeleteMappedResultsForDocumentId((string)documentId, indexId, deleted);
 				return doc;
 			})
 				.Where(x => x is FilteredDocument == false)
@@ -97,7 +97,7 @@ namespace Raven.Database.Indexing
 			var allReferencedDocs = new ConcurrentQueue<IDictionary<string, HashSet<string>>>();
 
 			if (documentsWrapped.Count > 0)
-				actions.MapReduce.UpdateRemovedMapReduceStats(indexId.ToString(), deleted);
+				actions.MapReduce.UpdateRemovedMapReduceStats(indexId, deleted);
 
 			var allState = new ConcurrentQueue<Tuple<HashSet<ReduceKeyAndBucket>, IndexingWorkStats, Dictionary<string, int>>>();
 			BackgroundTaskExecuter.Instance.ExecuteAllBuffered(context, documentsWrapped, partition =>
@@ -159,7 +159,7 @@ namespace Raven.Database.Indexing
 				while (enumerator.MoveNext())
 				{
 					var reduceKeyStat = enumerator.Current;
-					accessor.MapReduce.IncrementReduceKeyCounter(indexId.ToString(), reduceKeyStat.Key, reduceKeyStat.Count);
+					accessor.MapReduce.IncrementReduceKeyCounter(indexId, reduceKeyStat.Key, reduceKeyStat.Count);
 				}
 			}));
 
@@ -167,7 +167,7 @@ namespace Raven.Database.Indexing
 			{
 				while (enumerator.MoveNext())
 				{
-					accessor.MapReduce.ScheduleReductions(indexId.ToString(), 0, enumerator.Current);
+					accessor.MapReduce.ScheduleReductions(indexId, 0, enumerator.Current);
 				}
 			}));
 
@@ -210,7 +210,7 @@ namespace Raven.Database.Indexing
 
 				var data = GetMappedData(doc);
 
-				actions.MapReduce.PutMappedResult(indexId.ToString(), currentKey, reduceKey, data);
+				actions.MapReduce.PutMappedResult(indexId, currentKey, reduceKey, data);
 				statsPerKey[reduceKey] = statsPerKey.GetOrDefault(reduceKey) + 1;
 				actions.General.MaybePulseTransaction();
 				changes.Add(new ReduceKeyAndBucket(IndexingUtil.MapBucket(currentKey), reduceKey));
@@ -302,13 +302,13 @@ namespace Raven.Database.Indexing
 				var reduceKeyAndBuckets = new Dictionary<ReduceKeyAndBucket, int>();
 				foreach (var key in keys)
 				{
-					actions.MapReduce.DeleteMappedResultsForDocumentId(key, indexId.ToString(), reduceKeyAndBuckets);
+					actions.MapReduce.DeleteMappedResultsForDocumentId(key, indexId, reduceKeyAndBuckets);
 				}
 
-				actions.MapReduce.UpdateRemovedMapReduceStats(indexId.ToString(), reduceKeyAndBuckets);
+				actions.MapReduce.UpdateRemovedMapReduceStats(indexId, reduceKeyAndBuckets);
 				foreach (var reduceKeyAndBucket in reduceKeyAndBuckets)
 				{
-					actions.MapReduce.ScheduleReductions(indexId.ToString(), 0, reduceKeyAndBucket.Key);
+					actions.MapReduce.ScheduleReductions(indexId, 0, reduceKeyAndBucket.Key);
 				}
 			});
 			Write((writer, analyzer, stats) =>
@@ -505,7 +505,7 @@ namespace Raven.Database.Indexing
 								{
 									case 0:
 									case 1:
-										Actions.MapReduce.PutReducedResult(indexId.ToString(), reduceKeyAsString, Level + 1, mappedResults.Key, mappedResults.Key / 1024, ToJsonDocument(doc));
+										Actions.MapReduce.PutReducedResult(indexId, reduceKeyAsString, Level + 1, mappedResults.Key, mappedResults.Key / 1024, ToJsonDocument(doc));
 										Actions.General.MaybePulseTransaction();
 										break;
 									case 2:

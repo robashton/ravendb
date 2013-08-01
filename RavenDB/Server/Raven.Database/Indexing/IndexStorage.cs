@@ -317,7 +317,7 @@ namespace Raven.Database.Indexing
 
 				do
 				{
-					reduceKeysAndTypes = actions.MapReduce.GetReduceKeysAndTypes(indexDefinition.IndexId.ToString(), start, take).ToList();
+					reduceKeysAndTypes = actions.MapReduce.GetReduceKeysAndTypes(indexDefinition.IndexId, start, take).ToList();
 					start += take;
 
 					var keysToScheduleOnLevel2 =
@@ -330,7 +330,7 @@ namespace Raven.Database.Indexing
 
 					foreach (var reduceKey in keysToScheduleOnLevel0.Select(x => x.ReduceKey))
 					{
-						var mappedBuckets = actions.MapReduce.GetMappedBuckets(indexDefinition.IndexId.ToString(), reduceKey).Distinct();
+						var mappedBuckets = actions.MapReduce.GetMappedBuckets(indexDefinition.IndexId, reduceKey).Distinct();
 
 						itemsToScheduleOnLevel0.AddRange(mappedBuckets.Select(x => new ReduceKeyAndBucket(x, reduceKey)));
 
@@ -339,13 +339,13 @@ namespace Raven.Database.Indexing
 
 					foreach (var itemToReduce in itemsToScheduleOnLevel2)
 					{
-						actions.MapReduce.ScheduleReductions(indexDefinition.IndexId.ToString(), 2, itemToReduce);
+						actions.MapReduce.ScheduleReductions(indexDefinition.IndexId, 2, itemToReduce);
 						actions.General.MaybePulseTransaction();
 					}
 
 					foreach (var itemToReduce in itemsToScheduleOnLevel0)
 					{
-						actions.MapReduce.ScheduleReductions(indexDefinition.IndexId.ToString(), 0, itemToReduce);
+						actions.MapReduce.ScheduleReductions(indexDefinition.IndexId, 0, itemToReduce);
 						actions.General.MaybePulseTransaction();
 					}
 
