@@ -1231,6 +1231,7 @@ namespace Raven.Database
         private IndexCreationOptions FindIndexCreationOptions(IndexDefinition definition, ref string name)
         {
             definition.PublicName = name = IndexDefinitionStorage.FixupIndexName(name);
+            definition.IndexId = IndexDefinitionStorage.NextIndexId();
             definition.RemoveDefaultValues();
             IndexDefinitionStorage.ResolveAnalyzers(definition);
             var findIndexCreationOptions = IndexDefinitionStorage.FindIndexCreationOptions(definition);

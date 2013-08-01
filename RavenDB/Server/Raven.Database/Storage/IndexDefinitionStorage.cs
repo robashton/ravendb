@@ -280,7 +280,7 @@ namespace Raven.Database.Storage
 
         public IndexCreationOptions FindIndexCreationOptions(IndexDefinition indexDef)
         {
-            var indexDefinition = GetIndexDefinition(indexDef.IndexId);
+            var indexDefinition = GetIndexDefinition(indexDef.PublicName);
             if (indexDefinition != null)
             {
                 return indexDefinition.Equals(indexDef)
@@ -349,12 +349,14 @@ namespace Raven.Database.Storage
         public void RemoveTransformer(string name)
         {
             var transformer = GetTransformerDefinition(name);
+            if (transformer == null) return;
             RemoveTransformer(transformer.IndexId);
         }
 
         public void RemoveIndex(string name)
         {
             var index = GetIndexDefinition(name);
+            if (index == null) return;
             RemoveIndex(index.IndexId);
         }
 
@@ -381,5 +383,10 @@ namespace Raven.Database.Storage
         {
             return transformCache.Values.FirstOrDefault(x => String.Compare(x.Name, name, StringComparison.OrdinalIgnoreCase) == 0);
         }
+
+	    public int NextIndexId()
+	    {
+	        return indexDefinitions.Any() ? indexDefinitions.Values.Max(x => x.IndexId) + 1 : 0;
+	    }
     }
 }

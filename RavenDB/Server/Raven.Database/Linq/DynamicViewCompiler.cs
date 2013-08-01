@@ -49,7 +49,7 @@ namespace Raven.Database.Linq
 		private void TransformQueryToClass()
 		{
 
-		    CSharpSafeName = "Index_" + Name;
+            CSharpSafeName = "Index_" + Regex.Replace(Name, @"[^\w\d]", "_");  
 			var type = new TypeDeclaration
 			{
 				Modifiers = Modifiers.Public,

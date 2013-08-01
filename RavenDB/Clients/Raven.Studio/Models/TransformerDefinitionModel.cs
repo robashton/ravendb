@@ -164,12 +164,12 @@ namespace Raven.Studio.Models
 					}
 				}
 
-				ApplicationModel.Current.AddNotification(new Notification("saving transformer " + transformer.Transformer.Name));
+				ApplicationModel.Current.AddNotification(new Notification("saving transformer " + transformer.Transformer.PublicName));
 				DatabaseCommands.PutTransformerAsync(transformer.Transformer.PublicName, transformer.Transformer)
 					.ContinueOnSuccess(() =>
 					{
 						ApplicationModel.Current.AddNotification(
-							new Notification("transformer " + transformer.Transformer.Name + " saved"));
+							new Notification("transformer " + transformer.Transformer.PublicName + " saved"));
 						PutTransformerNameInUrl(transformer.Transformer.PublicName);
 
 					    transformer.IsShowingErrors = false;
@@ -206,7 +206,7 @@ namespace Raven.Studio.Models
 
 			public override void Execute(object parameter)
 			{
-				AskUser.ConfirmationAsync("Confirm Delete", "Really delete '" + model.Transformer.Name + "' transformer?")
+				AskUser.ConfirmationAsync("Confirm Delete", "Really delete '" + model.Transformer.PublicName + "' transformer?")
 					.ContinueWhenTrue(DeleteTransformer);
 			}
 
@@ -218,11 +218,11 @@ namespace Raven.Studio.Models
 					{
 						if (t.IsFaulted)
 						{
-							ApplicationModel.Current.AddErrorNotification(t.Exception, "transformer " + model.Transformer.Name + " could not be deleted");
+							ApplicationModel.Current.AddErrorNotification(t.Exception, "transformer " + model.Transformer.PublicName + " could not be deleted");
 						}
 						else
 						{
-							ApplicationModel.Current.AddInfoNotification("transformer " + model.Transformer.Name + " successfully deleted");
+							ApplicationModel.Current.AddInfoNotification("transformer " + model.Transformer.PublicName + " successfully deleted");
 							UrlUtil.Navigate("/transformers");
 						}
 					});
