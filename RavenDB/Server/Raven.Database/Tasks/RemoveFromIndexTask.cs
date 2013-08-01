@@ -40,7 +40,7 @@ namespace Raven.Database.Tasks
 				context.TransactionalStorage.Batch(accessor =>
 				{
 					keysToRemove = new HashSet<string>(Keys.Where(key=>FilterDocuments(context, accessor, key)));
-					accessor.Indexing.TouchIndexEtag(Index.ToString());
+					accessor.Indexing.TouchIndexEtag(Index);
 				});
 				if (keysToRemove.Count == 0)
 					return;

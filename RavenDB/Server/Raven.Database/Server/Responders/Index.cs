@@ -246,9 +246,10 @@ namespace Raven.Database.Server.Responders
         private void GetIndexStats(IHttpContext context, string index)
         {
             IndexStats stats = null;
+            var instance = Database.IndexStorage.GetIndexInstance(index);
             Database.TransactionalStorage.Batch(accessor =>
             {
-                stats = accessor.Indexing.GetIndexStats(index);
+                stats = accessor.Indexing.GetIndexStats(instance.indexId);
             });
 
             if (stats == null)
@@ -257,8 +258,8 @@ namespace Raven.Database.Server.Responders
                 return;
             }
 
-            stats.LastQueryTimestamp = Database.IndexStorage.GetLastQueryTime(index);
-            stats.Performance = Database.IndexStorage.GetIndexingPerformance(index);
+            stats.LastQueryTimestamp = Database.IndexStorage.GetLastQueryTime(instance.indexId);
+            stats.Performance = Database.IndexStorage.GetIndexingPerformance(instance.indexId);
 
             context.WriteJson(stats);
         }

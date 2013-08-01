@@ -196,14 +196,14 @@ select new
 
 				foreach (var staleIndex in statistics.StaleIndexes)
 				{
-					var indexStats = statistics.Indexes.Single(x => x.Name == staleIndex.ToString());
+					var indexStats = statistics.Indexes.Single(x => x.Id == staleIndex);
 					var latencyInTime = (DateTime.UtcNow - indexStats.LastIndexedTimestamp).TotalMilliseconds;
 					LatencyTimes.Add(new KeyValuePair<int, double>(staleIndex, latencyInTime));
 
 					var latencyInDocuments = statistics.CountOfDocuments - indexStats.IndexingAttempts;
 					LatencyInDocuments.Add(new KeyValuePair<int, long>(staleIndex, latencyInDocuments));
 
-					logger.Debug("Stale index {0} - {1:#,#}/{2:#,#} - latency: {3:#,#}, {4:#,#}ms", indexStats.Name, indexStats.IndexingAttempts, statistics.CountOfDocuments,
+					logger.Debug("Stale index {0} - {1:#,#}/{2:#,#} - latency: {3:#,#}, {4:#,#}ms", indexStats.Id, indexStats.IndexingAttempts, statistics.CountOfDocuments,
 						latencyInDocuments,
 						latencyInTime);
 				}

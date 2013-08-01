@@ -139,7 +139,7 @@ namespace Raven.Database.Indexing
 			{
 				foreach (var referencedDocument in result)
 				{
-					actions.Indexing.UpdateDocumentReferences(indexId.ToString(), referencedDocument.Key, referencedDocument.Value);
+					actions.Indexing.UpdateDocumentReferences(indexId, referencedDocument.Key, referencedDocument.Value);
 					actions.General.MaybePulseTransaction();
 				}
 			}

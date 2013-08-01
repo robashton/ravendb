@@ -49,7 +49,7 @@ namespace Raven.Studio.Models
 			var currentSelection = ItemSelection.GetSelectedItems().Select(i => i.Name).ToHashSet();
 
 			var indexGroups = from index in indexes
-							  let groupDetails = GetIndexGroup(index.Name)
+							  let groupDetails = GetIndexGroup(index.Id)
 							  let indexGroup = groupDetails.Item1
 							  let indexOrder = groupDetails.Item2
 							  orderby indexOrder

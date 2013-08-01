@@ -144,7 +144,7 @@ namespace Raven.Database.Indexing
 					{
 						foreach (var referencedDocument in result)
 						{
-							actions.Indexing.UpdateDocumentReferences(indexId.ToString(), referencedDocument.Key, referencedDocument.Value);
+							actions.Indexing.UpdateDocumentReferences(indexId, referencedDocument.Key, referencedDocument.Value);
 						}
 					}
 
@@ -348,7 +348,7 @@ namespace Raven.Database.Indexing
 					batcher => batcher.Dispose());
 
 				IndexStats currentIndexStats = null;
-				context.TransactionalStorage.Batch(accessor => currentIndexStats = accessor.Indexing.GetIndexStats(indexId.ToString()));
+				context.TransactionalStorage.Batch(accessor => currentIndexStats = accessor.Indexing.GetIndexStats(indexId));
 
 				return new IndexedItemsInfo
 				{

@@ -134,7 +134,7 @@ namespace Raven.Database.Indexing
 					LoadExistingSuggestionsExtentions(indexName, indexImplementation);
 					documentDatabase.TransactionalStorage.Batch(accessor =>
 					{
-						IndexStats indexStats = accessor.Indexing.GetIndexStats(indexName);
+						IndexStats indexStats = accessor.Indexing.GetIndexStats(indexDefinition.IndexId);
 						if (indexStats != null)
 						{
 							indexImplementation.Priority = indexStats.Priority;
@@ -181,8 +181,8 @@ namespace Raven.Database.Indexing
 			{
 				documentDatabase.TransactionalStorage.Batch(accessor =>
 				{
-					accessor.Indexing.DeleteIndex(indexDefinition.IndexId.ToString());
-					accessor.Indexing.AddIndex(indexDefinition.IndexId.ToString(), indexDefinition.IsMapReduce);
+				    accessor.Indexing.DeleteIndex(indexDefinition.IndexId);
+					accessor.Indexing.AddIndex(indexDefinition.IndexId, indexDefinition.IsMapReduce);
 				});
 
 			    var indexFullPath = Path.Combine(path, indexDefinition.IndexId.ToString());
@@ -358,7 +358,7 @@ namespace Raven.Database.Indexing
 		{
 			documentDatabase.TransactionalStorage.Batch(
 				accessor =>
-				accessor.Indexing.UpdateLastIndexed(indexDefinition.IndexId.ToString(), lastCommitPoint.HighestCommitedETag,
+				accessor.Indexing.UpdateLastIndexed(indexDefinition.IndexId, lastCommitPoint.HighestCommitedETag,
 													lastCommitPoint.TimeStamp));
 		}
 
@@ -728,7 +728,7 @@ namespace Raven.Database.Indexing
 					value.Priority = IndexingPriority.Normal;
 					try
 					{
-						accessor.Indexing.SetIndexPriority(index, IndexingPriority.Normal);
+						accessor.Indexing.SetIndexPriority(value.indexId, IndexingPriority.Normal);
 					}
 					catch (Exception e)
 					{
@@ -790,9 +790,9 @@ namespace Raven.Database.Indexing
 			});
 		}
 
-		public void RemoveFromIndex(string index, string[] keys, WorkContext context)
+		public void RemoveFromIndex(int index, string[] keys, WorkContext context)
 		{
-			Index value = TryIndexByName(index);
+		    Index value = indexes[index];
 			if (value == null)
 			{
 				log.Debug("Removing from non existing index '{0}', ignoring", index);
@@ -832,7 +832,7 @@ namespace Raven.Database.Indexing
 		}
 
 		public void Reduce(
-			string index,
+			int index,
 			AbstractViewGenerator viewGenerator,
 			IEnumerable<IGrouping<int, object>> mappedResults,
 			int level,
@@ -841,7 +841,7 @@ namespace Raven.Database.Indexing
 			HashSet<string> reduceKeys,
 			int inputCount)
 		{
-		    Index value = TryIndexByName(index);
+		    Index value = indexes[index];
 			if (value == null)
 			{
 				log.Debug("Tried to index on a non existent index {0}, ignoring", index);
@@ -940,7 +940,7 @@ namespace Raven.Database.Indexing
 			{
 				var autoIndexesSortedByLastQueryTime =
 					(from index in indexes
-					 let stats = accessor.Indexing.GetIndexStats(index.Key.ToString())
+					 let stats = accessor.Indexing.GetIndexStats(index.Key)
 					 let lastQueryTime = stats.LastQueryTimestamp ?? DateTime.MinValue
 					 where index.Value.PublicName.StartsWith("Auto/", StringComparison.InvariantCultureIgnoreCase)
 					 orderby lastQueryTime
@@ -982,7 +982,7 @@ namespace Raven.Database.Indexing
 								var nextItem = autoIndexesSortedByLastQueryTime[i + 1];
 								if ((nextItem.LastQueryTime - thisItem.LastQueryTime).TotalMinutes > timeToWaitForIdleMinutes)
 								{
-									accessor.Indexing.SetIndexPriority(thisItem.Name, IndexingPriority.Idle);
+									accessor.Indexing.SetIndexPriority(thisItem.Index.indexId, IndexingPriority.Idle);
 									thisItem.Index.Priority = IndexingPriority.Idle;
 									documentDatabase.RaiseNotifications(new IndexChangeNotification()
 									{
@@ -1013,7 +1013,7 @@ namespace Raven.Database.Indexing
 			// can be safely removed, probably
 			if (age < 90 && lastQuery < 30)
 			{
-				accessor.Indexing.DeleteIndex(thisItem.Name);
+				accessor.Indexing.DeleteIndex(thisItem.Index.indexId);
 				return;
 			}
 
@@ -1022,7 +1022,7 @@ namespace Raven.Database.Indexing
 
 			// old enough, and haven't been queried for a while, mark it as abandoned
 
-			accessor.Indexing.SetIndexPriority(thisItem.Name, IndexingPriority.Abandoned);
+			accessor.Indexing.SetIndexPriority(thisItem.Index.indexId, IndexingPriority.Abandoned);
 
 			thisItem.Index.Priority = IndexingPriority.Abandoned;
 
@@ -1044,7 +1044,7 @@ namespace Raven.Database.Indexing
 			if (age < (timeToWaitForIdle * 6) && lastQuery < (2.5 * timeToWaitForIdle))
 				return;
 
-			accessor.Indexing.SetIndexPriority(thisItem.Name, IndexingPriority.Idle);
+			accessor.Indexing.SetIndexPriority(thisItem.Index.indexId, IndexingPriority.Idle);
 
 			thisItem.Index.Priority = IndexingPriority.Idle;
 
@@ -1101,14 +1101,19 @@ namespace Raven.Database.Indexing
 			GetIndexByName(indexName).MarkQueried();
 		}
 
-		public DateTime? GetLastQueryTime(string index)
+		public DateTime? GetLastQueryTime(int index)
 		{
-			return GetIndexByName(index).LastQueryTime;
+			return GetIndexInstance(index).LastQueryTime;
 		}
 
-		public IndexingPerformanceStats[] GetIndexingPerformance(string index)
+		public DateTime? GetLastQueryTime(string index)
 		{
-			return GetIndexByName(index).GetIndexingPerformance();
+			return GetIndexInstance(index).LastQueryTime;
+		}
+
+		public IndexingPerformanceStats[] GetIndexingPerformance(int index)
+		{
+			return GetIndexInstance(index).GetIndexingPerformance();
 		}
 
 		public void Backup(string directory, string incrementalTag = null)
@@ -1123,9 +1128,9 @@ namespace Raven.Database.Indexing
 											 index.MergeSegments());
 		}
 
-		public string IndexOnRam(string name)
+		public string IndexOnRam(int id)
 		{
-			return GetIndexByName(name).IsOnRam;
+			return GetIndexInstance(id).IsOnRam;
 		}
 
 		public void ForceWriteToDisk(string index)

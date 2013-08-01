@@ -303,7 +303,8 @@ namespace Raven.Database.Queries
 		        {
 			        prioritizedResults = optimizerResults.OrderByDescending(result =>
 			        {
-				        var stats = accessor.Indexing.GetIndexStats(result.IndexName.ToString());
+			            var instance = this.database.IndexStorage.GetIndexInstance(result.IndexName);
+				        var stats = accessor.Indexing.GetIndexStats(instance.indexId);
 				        if (stats == null)
 							return Etag.Empty;
 
