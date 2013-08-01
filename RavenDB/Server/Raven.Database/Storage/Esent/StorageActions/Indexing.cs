@@ -62,9 +62,10 @@ namespace Raven.Storage.Esent.StorageActions
 			return GetIndexStats();
 		}
 
+
 		private IndexStats GetIndexStats()
 		{
-			var id = Api.RetrieveColumnAsInt32(session, IndexesStats, tableColumnsCache.IndexesStatsColumns["key"]);
+			var id = Convert.ToInt32(Api.RetrieveColumnAsString(session, IndexesStats, tableColumnsCache.IndexesStatsColumns["key"]));
 			Api.MakeKey(session, IndexesStatsReduce, id.ToString(), Encoding.Unicode, MakeKeyGrbit.NewKey);
 			var hasReduce = Api.TrySeek(session, IndexesStatsReduce, SeekGrbit.SeekEQ);
 

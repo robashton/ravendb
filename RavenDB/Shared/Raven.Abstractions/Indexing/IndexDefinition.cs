@@ -307,6 +307,7 @@ namespace Raven.Abstractions.Indexing
 			var indexDefinition = new IndexDefinition
 			{
 				IndexId = IndexId,
+        PublicName = PublicName,
 				Reduce = Reduce,
 				TransformResults = TransformResults,
 				cachedHashCodeAsBytes = cachedHashCodeAsBytes
