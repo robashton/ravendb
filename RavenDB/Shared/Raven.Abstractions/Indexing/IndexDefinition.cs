@@ -34,7 +34,7 @@ namespace Raven.Abstractions.Indexing
 	    /// <summary>
 		/// Get or set the id of this index
 		/// </summary>
-		public int Name { get; set; }
+		public int IndexId { get; set; }
 
         /// <summary>
         /// This is the means by which the outside world refers to this index defiintion
@@ -153,7 +153,7 @@ namespace Raven.Abstractions.Indexing
 			if (ReferenceEquals(this, other))
 				return true;
 			return Maps.SequenceEqual(other.Maps) &&
-					Equals(other.Name, Name) &&
+					Equals(other.IndexId, IndexId) &&
 					Equals(other.Reduce, Reduce) &&
 					Equals(other.TransformResults, TransformResults) &&
 					DictionaryEquals(other.Stores, Stores) &&
@@ -306,7 +306,7 @@ namespace Raven.Abstractions.Indexing
 		{
 			var indexDefinition = new IndexDefinition
 			{
-				Name = Name,
+				IndexId = IndexId,
 				Reduce = Reduce,
 				TransformResults = TransformResults,
 				cachedHashCodeAsBytes = cachedHashCodeAsBytes

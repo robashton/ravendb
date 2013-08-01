@@ -1133,7 +1133,7 @@ namespace Raven.Database
                 return name; // no op for the same transformer
 
             IndexDefinitionStorage.CreateAndPersistTransform(definition);
-            IndexDefinitionStorage.AddTransform(definition.Name, definition);
+            IndexDefinitionStorage.AddTransform(definition.IndexId, definition);
 
             return name;
         }
@@ -1191,7 +1191,7 @@ namespace Raven.Database
             // The act of adding it here make it visible to other threads
             // we have to do it in this way so first we prepare all the elements of the 
             // index, then we add it to the storage in a way that make it public
-            IndexDefinitionStorage.AddIndex(definition.Name, definition);
+            IndexDefinitionStorage.AddIndex(definition.IndexId, definition);
 
             InvokeSuggestionIndexing(name, definition);
 

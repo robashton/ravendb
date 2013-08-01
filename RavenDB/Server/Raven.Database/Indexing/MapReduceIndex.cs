@@ -89,7 +89,7 @@ namespace Raven.Database.Indexing
 			{
 				sourceCount++;
 				var documentId = doc.__document_id;
-				actions.MapReduce.DeleteMappedResultsForDocumentId((string)documentId, name.ToString(), deleted);
+				actions.MapReduce.DeleteMappedResultsForDocumentId((string)documentId, indexId.ToString(), deleted);
 				return doc;
 			})
 				.Where(x => x is FilteredDocument == false)
@@ -97,7 +97,7 @@ namespace Raven.Database.Indexing
 			var allReferencedDocs = new ConcurrentQueue<IDictionary<string, HashSet<string>>>();
 
 			if (documentsWrapped.Count > 0)
-				actions.MapReduce.UpdateRemovedMapReduceStats(name.ToString(), deleted);
+				actions.MapReduce.UpdateRemovedMapReduceStats(indexId.ToString(), deleted);
 
 			var allState = new ConcurrentQueue<Tuple<HashSet<ReduceKeyAndBucket>, IndexingWorkStats, Dictionary<string, int>>>();
 			BackgroundTaskExecuter.Instance.ExecuteAllBuffered(context, documentsWrapped, partition =>
@@ -139,7 +139,7 @@ namespace Raven.Database.Indexing
 			{
 				foreach (var referencedDocument in result)
 				{
-					actions.Indexing.UpdateDocumentReferences(name.ToString(), referencedDocument.Key, referencedDocument.Value);
+					actions.Indexing.UpdateDocumentReferences(indexId.ToString(), referencedDocument.Key, referencedDocument.Value);
 					actions.General.MaybePulseTransaction();
 				}
 			}
@@ -159,7 +159,7 @@ namespace Raven.Database.Indexing
 				while (enumerator.MoveNext())
 				{
 					var reduceKeyStat = enumerator.Current;
-					accessor.MapReduce.IncrementReduceKeyCounter(name.ToString(), reduceKeyStat.Key, reduceKeyStat.Count);
+					accessor.MapReduce.IncrementReduceKeyCounter(indexId.ToString(), reduceKeyStat.Key, reduceKeyStat.Count);
 				}
 			}));
 
@@ -167,7 +167,7 @@ namespace Raven.Database.Indexing
 			{
 				while (enumerator.MoveNext())
 				{
-					accessor.MapReduce.ScheduleReductions(name.ToString(), 0, enumerator.Current);
+					accessor.MapReduce.ScheduleReductions(indexId.ToString(), 0, enumerator.Current);
 				}
 			}));
 
@@ -183,7 +183,7 @@ namespace Raven.Database.Indexing
 				Started = start
 			});
 			BatchCompleted("Current Map");
-			logIndexing.Debug("Mapped {0} documents for {1}", count, name);
+			logIndexing.Debug("Mapped {0} documents for {1}", count, indexId);
 		}
 
 		private int ProcessBatch(AbstractViewGenerator viewGenerator, List<object> currentDocumentResults, string currentKey, HashSet<ReduceKeyAndBucket> changes,
@@ -210,7 +210,7 @@ namespace Raven.Database.Indexing
 
 				var data = GetMappedData(doc);
 
-				actions.MapReduce.PutMappedResult(name.ToString(), currentKey, reduceKey, data);
+				actions.MapReduce.PutMappedResult(indexId.ToString(), currentKey, reduceKey, data);
 				statsPerKey[reduceKey] = statsPerKey.GetOrDefault(reduceKey) + 1;
 				actions.General.MaybePulseTransaction();
 				changes.Add(new ReduceKeyAndBucket(IndexingUtil.MapBucket(currentKey), reduceKey));
@@ -302,19 +302,19 @@ namespace Raven.Database.Indexing
 				var reduceKeyAndBuckets = new Dictionary<ReduceKeyAndBucket, int>();
 				foreach (var key in keys)
 				{
-					actions.MapReduce.DeleteMappedResultsForDocumentId(key, name.ToString(), reduceKeyAndBuckets);
+					actions.MapReduce.DeleteMappedResultsForDocumentId(key, indexId.ToString(), reduceKeyAndBuckets);
 				}
 
-				actions.MapReduce.UpdateRemovedMapReduceStats(name.ToString(), reduceKeyAndBuckets);
+				actions.MapReduce.UpdateRemovedMapReduceStats(indexId.ToString(), reduceKeyAndBuckets);
 				foreach (var reduceKeyAndBucket in reduceKeyAndBuckets)
 				{
-					actions.MapReduce.ScheduleReductions(name.ToString(), 0, reduceKeyAndBucket.Key);
+					actions.MapReduce.ScheduleReductions(indexId.ToString(), 0, reduceKeyAndBucket.Key);
 				}
 			});
 			Write((writer, analyzer, stats) =>
 			{
 				stats.Operation = IndexingWorkStats.Status.Ignore;
-				logIndexing.Debug(() => string.Format("Deleting ({0}) from {1}", string.Join(", ", keys), name));
+				logIndexing.Debug(() => string.Format("Deleting ({0}) from {1}", string.Join(", ", keys), indexId));
 				writer.DeleteDocuments(keys.Select(k => new Term(Constants.ReduceKeyFieldName, k.ToLowerInvariant())).ToArray());
 				return new IndexedItemsInfo
 				{
@@ -327,7 +327,7 @@ namespace Raven.Database.Indexing
 		{
 			private readonly MapReduceIndex parent;
 			private readonly int inputCount;
-			private readonly int name;
+			private readonly int indexId;
 			readonly AnonymousObjectToLuceneDocumentConverter anonymousObjectToLuceneDocumentConverter;
 			private readonly Document luceneDoc = new Document();
 			private readonly Field reduceValueField = new Field(Constants.ReduceValueFieldName, "dummy",
@@ -342,7 +342,7 @@ namespace Raven.Database.Indexing
 			{
 				this.parent = parent;
 				this.inputCount = inputCount;
-				name = this.parent.name;
+				indexId = this.parent.indexId;
 				ViewGenerator = viewGenerator;
 				MappedResultsByBucket = mappedResultsByBucket;
 				Level = level;
@@ -354,7 +354,7 @@ namespace Raven.Database.Indexing
 
 				if (Level == 2)
 				{
-					batchers = Context.IndexUpdateTriggers.Select(x => x.CreateBatcher(name))
+					batchers = Context.IndexUpdateTriggers.Select(x => x.CreateBatcher(indexId))
 								.Where(x => x != null)
 								.ToList();
 				}
@@ -374,7 +374,7 @@ namespace Raven.Database.Indexing
 					object reduceKey = viewGenerator.GroupByExtraction(doc);
 					if (reduceKey == null)
 					{
-						throw new InvalidOperationException("Could not find reduce key for " + name + " in the result: " + doc);
+						throw new InvalidOperationException("Could not find reduce key for " + indexId + " in the result: " + doc);
 					}
 					return ReduceKeyToString(reduceKey);
 				}
@@ -505,7 +505,7 @@ namespace Raven.Database.Indexing
 								{
 									case 0:
 									case 1:
-										Actions.MapReduce.PutReducedResult(name.ToString(), reduceKeyAsString, Level + 1, mappedResults.Key, mappedResults.Key / 1024, ToJsonDocument(doc));
+										Actions.MapReduce.PutReducedResult(indexId.ToString(), reduceKeyAsString, Level + 1, mappedResults.Key, mappedResults.Key / 1024, ToJsonDocument(doc));
 										Actions.General.MaybePulseTransaction();
 										break;
 									case 2:
@@ -526,7 +526,7 @@ namespace Raven.Database.Indexing
 								ex =>
 								{
 									logIndexing.WarnException("Failed to notify index update trigger batcher about an error", ex);
-									Context.AddError(name, null, ex.Message, "AnErrorOccured Trigger");
+									Context.AddError(indexId,  parent.indexDefinition.PublicName, null, ex.Message, "AnErrorOccured Trigger");
 								},
 								x => x.AnErrorOccured(e));
 						}
@@ -540,7 +540,7 @@ namespace Raven.Database.Indexing
 								e =>
 								{
 									logIndexing.WarnException("Failed to dispose on index update trigger", e);
-									Context.AddError(name, null, e.Message, "Dispose Trigger");
+									Context.AddError(indexId, parent.indexDefinition.PublicName, null, e.Message, "Dispose Trigger");
 								},
 								x => x.Dispose());
 						}
@@ -560,7 +560,7 @@ namespace Raven.Database.Indexing
 					Operation = "Reduce Level " + Level,
 					Started = start
 				});
-				logIndexing.Debug(() => string.Format("Reduce resulted in {0} entries for {1} for reduce keys: {2}", count, name, string.Join(", ", ReduceKeys)));
+				logIndexing.Debug(() => string.Format("Reduce resulted in {0} entries for {1} for reduce keys: {2}", count, indexId, string.Join(", ", ReduceKeys)));
 			}
 
 			private void WriteDocumentToIndex(object doc, RavenIndexWriter indexWriter, Analyzer analyzer)
@@ -585,9 +585,9 @@ namespace Raven.Database.Indexing
 					{
 						logIndexing.WarnException(
 							string.Format("Error when executed OnIndexEntryCreated trigger for index '{0}', key: '{1}'",
-										  name, reduceKeyAsString),
+										  indexId, reduceKeyAsString),
 							exception);
-						Context.AddError(name, reduceKeyAsString, exception.Message, "OnIndexEntryCreated Trigger");
+						Context.AddError(indexId, parent.PublicName, reduceKeyAsString, exception.Message, "OnIndexEntryCreated Trigger");
 					},
 					trigger => trigger.OnIndexEntryCreated(reduceKeyAsString, luceneDoc));
 
@@ -607,9 +607,9 @@ namespace Raven.Database.Indexing
 						{
 							logIndexing.WarnException(
 								string.Format("Error when executed OnIndexEntryDeleted trigger for index '{0}', key: '{1}'",
-											  name, entryKey),
+											  indexId, entryKey),
 								exception);
-							Context.AddError(name, entryKey, exception.Message, "OnIndexEntryDeleted Trigger");
+							Context.AddError(indexId, parent.PublicName, entryKey, exception.Message, "OnIndexEntryDeleted Trigger");
 						},
 						trigger => trigger.OnIndexEntryDeleted(entryKey));
 				}

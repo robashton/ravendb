@@ -10,10 +10,12 @@ namespace Raven.Abstractions.Data
 	public class ServerError
 	{
 		public int Index { get; set; }
+        public string IndexName { get; set; }
 		public string Error { get; set; }
 		public DateTime Timestamp { get; set; }
 		public string Document { get; set; }
         public string Action { get; set; }
+
 
 		public override string ToString()
 		{

@@ -481,7 +481,7 @@ namespace Raven.Database.Indexing
 				context.CancellationToken.ThrowIfCancellationRequested();
 
 			    var instance = context.IndexStorage.GetIndexInstance(index);
-				context.IndexStorage.Index(instance.name, viewGenerator, batch, context, actions, batch.DateTime ?? DateTime.MinValue);
+				context.IndexStorage.Index(instance.indexId, viewGenerator, batch, context, actions, batch.DateTime ?? DateTime.MinValue);
 			}
 			catch (OperationCanceledException)
 			{
