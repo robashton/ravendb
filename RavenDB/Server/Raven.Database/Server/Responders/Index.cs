@@ -305,18 +305,20 @@ namespace Raven.Database.Server.Responders
 
             Tuple<DateTime, Etag> indexTimestamp = null;
             bool isIndexStale = false;
+
+            var definition = Database.IndexDefinitionStorage.GetIndexDefinition(index);
 	        
 	        Database.TransactionalStorage.Batch(
                 accessor =>
                 {
-	                isIndexStale = accessor.Staleness.IsIndexStale(index, indexQuery.Cutoff, indexQuery.CutoffEtag);
+	                isIndexStale = accessor.Staleness.IsIndexStale(definition.IndexId, indexQuery.Cutoff, indexQuery.CutoffEtag);
 					if (isIndexStale == false && indexQuery.Cutoff == null && indexQuery.CutoffEtag == null)
 					{
 						var indexInstance = Database.IndexStorage.GetIndexInstance(index);
 						isIndexStale = isIndexStale || (indexInstance != null && indexInstance.IsMapIndexingInProgress);
 					}
 
-                    indexTimestamp = accessor.Staleness.IndexLastUpdatedAt(index);
+                    indexTimestamp = accessor.Staleness.IndexLastUpdatedAt(definition.IndexId);
                 });
             var indexEtag = Database.GetIndexEtag(index, null, indexQuery.ResultsTransformer);
             context.WriteETag(indexEtag);

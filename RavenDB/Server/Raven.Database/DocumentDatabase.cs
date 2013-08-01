@@ -416,7 +416,7 @@ namespace Raven.Database
                         {
 							var indexInstance = IndexStorage.GetIndexInstance(s);
 	                        return (indexInstance != null && indexInstance.IsMapIndexingInProgress) ||
-	                               actions.Staleness.IsIndexStale(s.ToString(), null, null);
+	                               actions.Staleness.IsIndexStale(s, null, null);
                         }).ToArray();
 					result.Indexes = actions.Indexing.GetIndexesStats().Where(x => x != null).ToArray();
                 });
@@ -1251,6 +1251,7 @@ namespace Raven.Database
             index = IndexDefinitionStorage.FixupIndexName(index);
             var highlightings = new Dictionary<string, Dictionary<string, string[]>>();
 	        var scoreExplanations = new Dictionary<string, string>();
+            var definition = IndexDefinitionStorage.GetIndexDefinition(index);
 
             Func<IndexQueryResult, object> tryRecordHighlightingAndScoreExplanation = queryResult =>
             {
@@ -1286,7 +1287,7 @@ namespace Raven.Database
 
                     resultEtag = GetIndexEtag(index, null, query.ResultsTransformer);
 
-                    stale = actions.Staleness.IsIndexStale(index, query.Cutoff, query.CutoffEtag);
+                    stale = actions.Staleness.IsIndexStale(definition.IndexId, query.Cutoff, query.CutoffEtag);
 
                     var indexInstance = IndexStorage.GetIndexInstance(index);
 					if (stale == false && query.Cutoff == null && query.CutoffEtag == null)
@@ -1294,7 +1295,7 @@ namespace Raven.Database
 						stale = stale || (indexInstance != null && indexInstance.IsMapIndexingInProgress);
 					}
 
-                    indexTimestamp = actions.Staleness.IndexLastUpdatedAt(index);
+                    indexTimestamp = actions.Staleness.IndexLastUpdatedAt(definition.IndexId);
                     var indexFailureInformation = actions.Indexing.GetFailureRate(indexInstance.indexId);
                     if (indexFailureInformation.IsInvalidIndex)
                     {
@@ -1414,12 +1415,13 @@ namespace Raven.Database
         public IEnumerable<string> QueryDocumentIds(string index, IndexQuery query, out bool stale)
         {
             index = IndexDefinitionStorage.FixupIndexName(index);
+            var definition = IndexDefinitionStorage.GetIndexDefinition(index);
             bool isStale = false;
             HashSet<string> loadedIds = null;
             TransactionalStorage.Batch(
                 actions =>
                 {
-                    isStale = actions.Staleness.IsIndexStale(index, query.Cutoff, null);
+                    isStale = actions.Staleness.IsIndexStale(definition.IndexId, query.Cutoff, null);
 
                     var indexInstance = IndexStorage.GetIndexInstance(index);
 	                if (isStale == false && query.Cutoff == null)
@@ -2274,14 +2276,14 @@ namespace Raven.Database
             {
 				var indexInstance = IndexStorage.GetIndexInstance(indexName);
 	            isStale = (indexInstance != null && indexInstance.IsMapIndexingInProgress) ||
-	                      accessor.Staleness.IsIndexStale(indexName, null, null);
+	                      accessor.Staleness.IsIndexStale(indexInstance.indexId, null, null);
                 lastDocEtag = accessor.Staleness.GetMostRecentDocumentEtag();
                 var indexStats = accessor.Indexing.GetIndexStats(indexInstance.indexId);
                 if (indexStats != null)
                 {
                     lastReducedEtag = indexStats.LastReducedEtag;
                 }
-                touchCount = accessor.Staleness.GetIndexTouchCount(indexName);
+                touchCount = accessor.Staleness.GetIndexTouchCount(indexInstance.indexId);
             });
 
             var indexDefinition = GetIndexDefinition(indexName);
