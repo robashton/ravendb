@@ -208,13 +208,13 @@ namespace Raven.Storage.Managed
 
 		public void DeleteIndex(int id)
 		{
-			storage.IndexingStats.Remove(id);
-			storage.LastIndexedEtags.Remove(id);
+			storage.IndexingStats.Remove(id.ToString());
+			storage.LastIndexedEtags.Remove(id.ToString());
 
 			foreach (var table in new[] { storage.MappedResults, storage.ReduceResults, storage.ScheduleReductions, storage.ReduceKeys, storage.DocumentReferences })
 			{
 				foreach (var key in table["ByView"].SkipTo(new RavenJObject { { "view", id } })
-					.TakeWhile(x => StringComparer.OrdinalIgnoreCase.Equals(x.Value<string>("view"), id)))
+					.TakeWhile(x => x.Value<int>("view") == id))
 				{
 					table.Remove(key);
 				}

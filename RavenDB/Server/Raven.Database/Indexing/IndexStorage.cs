@@ -118,7 +118,6 @@ namespace Raven.Database.Indexing
 			while (true)
 			{
 				Lucene.Net.Store.Directory luceneDirectory = null;
-
 				try
 				{
 					luceneDirectory = OpenOrCreateLuceneDirectory(indexDefinition, createIfMissing: resetTried);
