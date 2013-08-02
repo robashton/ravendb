@@ -186,7 +186,7 @@ namespace Raven.Studio.Models
 				.GetStatisticsAsync()
 				.ContinueOnSuccessInTheUIThread(databaseStatistics =>
 				{
-					var indexStats = databaseStatistics.Indexes.FirstOrDefault(stats => stats.Name == id.ToString());
+					var indexStats = databaseStatistics.Indexes.FirstOrDefault(stats => stats.Id == id);
 					if (indexStats == null)
 						return;
 					Priority = indexStats.Priority;
