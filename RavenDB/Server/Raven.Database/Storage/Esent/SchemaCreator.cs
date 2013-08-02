@@ -360,10 +360,8 @@ namespace Raven.Storage.Esent
 
 			Api.JetAddColumn(session, tableid, "view", new JET_COLUMNDEF
 			{
-				cbMax = 2048,
-				coltyp = JET_coltyp.LongText,
-				cp = JET_CP.Unicode,
-				grbit = ColumnNotNullIfOnHigherThanWindowsXp()
+			    coltyp = JET_coltyp.Long,
+				grbit = ColumndefGrbit.ColumnFixed | ColumndefGrbit.ColumnNotNULL 
 			}, null, 0, out columnid);
 
 			Api.JetAddColumn(session, tableid, "reduce_key", new JET_COLUMNDEF
@@ -434,10 +432,8 @@ namespace Raven.Storage.Esent
 
 			Api.JetAddColumn(session, tableid, "view", new JET_COLUMNDEF
 			{
-				cbMax = 2048,
-				coltyp = JET_coltyp.LongText,
-				cp = JET_CP.Unicode,
-				grbit = ColumnNotNullIfOnHigherThanWindowsXp()
+			    coltyp = JET_coltyp.Long,
+				grbit = ColumndefGrbit.ColumnFixed | ColumndefGrbit.ColumnNotNULL 
 			}, null, 0, out columnid);
 
 			Api.JetAddColumn(session, tableid, "document_key", new JET_COLUMNDEF
@@ -522,10 +518,8 @@ namespace Raven.Storage.Esent
 
 			Api.JetAddColumn(session, tableid, "view", new JET_COLUMNDEF
 			{
-				cbMax = 2048,
-				coltyp = JET_coltyp.LongText,
-				cp = JET_CP.Unicode,
-				grbit = ColumnNotNullIfOnHigherThanWindowsXp()
+			    coltyp = JET_coltyp.Long,
+				grbit = ColumndefGrbit.ColumnFixed | ColumndefGrbit.ColumnNotNULL 
 			}, null, 0, out columnid);
 
 			Api.JetAddColumn(session, tableid, "reduce_key", new JET_COLUMNDEF
@@ -905,10 +899,8 @@ namespace Raven.Storage.Esent
 
 			Api.JetAddColumn(session, tableid, "view", new JET_COLUMNDEF
 			{
-				cbMax = 2048,
-				coltyp = JET_coltyp.LongText,
-				cp = JET_CP.Unicode,
-				grbit = ColumnNotNullIfOnHigherThanWindowsXp()
+			    coltyp = JET_coltyp.Long,
+				grbit = ColumndefGrbit.ColumnFixed | ColumndefGrbit.ColumnNotNULL 
 			}, null, 0, out columnid);
 
 			Api.JetAddColumn(session, tableid, "reduce_key", new JET_COLUMNDEF
@@ -961,10 +953,8 @@ namespace Raven.Storage.Esent
 
 			Api.JetAddColumn(session, tableid, "view", new JET_COLUMNDEF
 			{
-				cbMax = 2048,
-				coltyp = JET_coltyp.LongText,
-				cp = JET_CP.Unicode,
-				grbit = ColumnNotNullIfOnHigherThanWindowsXp()
+			    coltyp = JET_coltyp.Long,
+				grbit = ColumndefGrbit.ColumnFixed | ColumndefGrbit.ColumnNotNULL 
 			}, null, 0, out columnid);
 
 			Api.JetAddColumn(session, tableid, "reduce_key", new JET_COLUMNDEF
@@ -1018,10 +1008,8 @@ namespace Raven.Storage.Esent
 
 			Api.JetAddColumn(session, tableid, "view", new JET_COLUMNDEF
 			{
-				cbMax = 2048,
-				coltyp = JET_coltyp.LongText,
-				cp = JET_CP.Unicode,
-				grbit = ColumnNotNullIfOnHigherThanWindowsXp()
+			    coltyp = JET_coltyp.Long,
+				grbit = ColumndefGrbit.ColumnFixed | ColumndefGrbit.ColumnNotNULL
 			}, null, 0, out columnid);
 
 			Api.JetAddColumn(session, tableid, "key", new JET_COLUMNDEF
