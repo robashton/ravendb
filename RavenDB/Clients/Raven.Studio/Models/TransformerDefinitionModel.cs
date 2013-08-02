@@ -142,7 +142,7 @@ namespace Raven.Studio.Models
 			{
 			    transformer.ClearDefinitionErrors();
 
-				if (string.IsNullOrWhiteSpace(transformer.Transformer.PublicName))
+				if (string.IsNullOrWhiteSpace(transformer.Transformer.Name))
 				{
 					transformer.ReportDefinitionError("Transformer must have a name");
 					return;
@@ -154,7 +154,7 @@ namespace Raven.Studio.Models
                     return;
                 }
 
-				if (transformer.IsNewTransformer == false && transformer.OriginalName != transformer.Transformer.PublicName)
+				if (transformer.IsNewTransformer == false && transformer.OriginalName != transformer.Transformer.Name)
 				{
 					if (AskUser.Confirmation("Can not rename and transformer",
 											 "If you wish to save a new transformer with this new name press OK, to cancel the save command press Cancel") == false)
@@ -164,13 +164,13 @@ namespace Raven.Studio.Models
 					}
 				}
 
-				ApplicationModel.Current.AddNotification(new Notification("saving transformer " + transformer.Transformer.PublicName));
-				DatabaseCommands.PutTransformerAsync(transformer.Transformer.PublicName, transformer.Transformer)
+				ApplicationModel.Current.AddNotification(new Notification("saving transformer " + transformer.Transformer.Name));
+				DatabaseCommands.PutTransformerAsync(transformer.Transformer.Name, transformer.Transformer)
 					.ContinueOnSuccess(() =>
 					{
 						ApplicationModel.Current.AddNotification(
-							new Notification("transformer " + transformer.Transformer.PublicName + " saved"));
-						PutTransformerNameInUrl(transformer.Transformer.PublicName);
+							new Notification("transformer " + transformer.Transformer.Name + " saved"));
+						PutTransformerNameInUrl(transformer.Transformer.Name);
 
 					    transformer.IsShowingErrors = false;
 					})
@@ -206,23 +206,23 @@ namespace Raven.Studio.Models
 
 			public override void Execute(object parameter)
 			{
-				AskUser.ConfirmationAsync("Confirm Delete", "Really delete '" + model.Transformer.PublicName + "' transformer?")
+				AskUser.ConfirmationAsync("Confirm Delete", "Really delete '" + model.Transformer.Name + "' transformer?")
 					.ContinueWhenTrue(DeleteTransformer);
 			}
 
 			private void DeleteTransformer()
 			{
 				DatabaseCommands
-					.DeleteTransformerAsync(model.Transformer.PublicName)
+					.DeleteTransformerAsync(model.Transformer.Name)
 					.ContinueOnUIThread(t =>
 					{
 						if (t.IsFaulted)
 						{
-							ApplicationModel.Current.AddErrorNotification(t.Exception, "transformer " + model.Transformer.PublicName + " could not be deleted");
+							ApplicationModel.Current.AddErrorNotification(t.Exception, "transformer " + model.Transformer.Name + " could not be deleted");
 						}
 						else
 						{
-							ApplicationModel.Current.AddInfoNotification("transformer " + model.Transformer.PublicName + " successfully deleted");
+							ApplicationModel.Current.AddInfoNotification("transformer " + model.Transformer.Name + " successfully deleted");
 							UrlUtil.Navigate("/transformers");
 						}
 					});

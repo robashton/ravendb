@@ -52,23 +52,23 @@ namespace Raven.Studio.Models
 
 			public override void Execute(object parameter)
 			{
-				AskUser.ConfirmationAsync("Confirm Delete", "Really delete '" + model.ItemSelection.PublicName + "' transformer?")
+				AskUser.ConfirmationAsync("Confirm Delete", "Really delete '" + model.ItemSelection.Name + "' transformer?")
 					.ContinueWhenTrue(DeleteTransformer);
 			}
 
 			private void DeleteTransformer()
 			{
 				DatabaseCommands
-					.DeleteTransformerAsync(model.ItemSelection.PublicName)
+					.DeleteTransformerAsync(model.ItemSelection.Name)
 					.ContinueOnUIThread(t =>
 					{
 						if (t.IsFaulted)
 						{
-							ApplicationModel.Current.AddErrorNotification(t.Exception, "transformer " + model.ItemSelection.PublicName + " could not be deleted");
+							ApplicationModel.Current.AddErrorNotification(t.Exception, "transformer " + model.ItemSelection.Name + " could not be deleted");
 						}
 						else
 						{
-							ApplicationModel.Current.AddInfoNotification("transformer " + model.ItemSelection.PublicName + " successfully deleted");
+							ApplicationModel.Current.AddInfoNotification("transformer " + model.ItemSelection.Name + " successfully deleted");
 							UrlUtil.Navigate("/transformers");
 						}
 					});

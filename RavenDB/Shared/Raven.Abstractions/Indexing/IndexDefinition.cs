@@ -349,7 +349,7 @@ namespace Raven.Abstractions.Indexing
 		/// </summary>
 		public string TransformResults { get; set; }
 		public int IndexId { get; set; }
-	    public string PublicName { get; set; }
+	    public string Name { get; set; }
 
 	    public bool Equals(TransformerDefinition other)
 		{

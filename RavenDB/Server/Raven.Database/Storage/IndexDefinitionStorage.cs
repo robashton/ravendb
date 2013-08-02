@@ -41,9 +41,14 @@ namespace Raven.Database.Storage
         private readonly ConcurrentDictionary<int, AbstractTransformer> transformCache =
             new ConcurrentDictionary<int, AbstractTransformer>();
 
+        private readonly ConcurrentDictionary<string, int> indexNameToId = 
+            new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        private readonly ConcurrentDictionary<string, int> transformNameToId = 
+            new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
         private readonly ConcurrentDictionary<int, TransformerDefinition> transformDefinitions =
             new ConcurrentDictionary<int, TransformerDefinition>();
-
 
         private readonly ConcurrentDictionary<int, IndexDefinition> indexDefinitions =
             new ConcurrentDictionary<int, IndexDefinition>();
@@ -135,8 +140,8 @@ namespace Raven.Database.Storage
         public string[] TransformerNames
         {
             get { return transformDefinitions.Values
-                .OrderBy(x => x.PublicName)
-                .Select(x=>x.PublicName)
+                .OrderBy(x => x.Name)
+                .Select(x=>x.Name)
                 .ToArray(); }
         }
 
@@ -193,7 +198,7 @@ namespace Raven.Database.Storage
 
         private DynamicTransformerCompiler AddAndCompileTransform(TransformerDefinition transformerDefinition)
         {
-            var transformer = new DynamicTransformerCompiler(transformerDefinition, configuration, extensions, transformerDefinition.PublicName, path);
+            var transformer = new DynamicTransformerCompiler(transformerDefinition, configuration, extensions, transformerDefinition.Name, path);
             var generator = transformer.GenerateInstance();
             transformCache.AddOrUpdate(transformerDefinition.IndexId, generator, (s, viewGenerator) => generator);
 
@@ -215,36 +220,41 @@ namespace Raven.Database.Storage
                     throw new InvalidOperationException("Index " + id + " is a compiled index, and cannot be replaced");
                 return definition;
             });
+            indexNameToId[definition.Name] = id;
         }
 
         public void AddTransform(int id, TransformerDefinition definition)
         {
             transformDefinitions.AddOrUpdate(id, definition, (s1, def) => definition);
+            transformNameToId[definition.Name] = id;
         }
 
         public void RemoveIndex(int id)
         {
             AbstractViewGenerator ignoredViewGenerator;
-            indexCache.TryRemove(id, out ignoredViewGenerator);
+            int ignoredId;
+            if (indexCache.TryRemove(id, out ignoredViewGenerator))
+                indexNameToId.TryRemove(ignoredViewGenerator.Name, out ignoredId);
             IndexDefinition ignoredIndexDefinition;
             indexDefinitions.TryRemove(id, out ignoredIndexDefinition);
             newDefinitionsThisSession.TryRemove(id, out ignoredIndexDefinition);
             if (configuration.RunInMemory)
                 return;
-            File.Delete(GetIndexSourcePath(id.ToString()) + ".index");
+            File.Delete(GetIndexSourcePath(id) + ".index");
         }
 
-        private string GetIndexSourcePath(string name)
+        private string GetIndexSourcePath(int id )
         {
-            var encodeIndexNameIfNeeded = FixupIndexName(name, path);
-            return Path.Combine(path, MonoHttpUtility.UrlEncode(encodeIndexNameIfNeeded));
+            return Path.Combine(path, id.ToString());
         }
         
         public IndexDefinition GetIndexDefinition(string name)
         {
-            return indexDefinitions.Values.FirstOrDefault(x => String.Compare(x.Name, name, StringComparison.OrdinalIgnoreCase) == 0);
+            int id = 0;
+            if (indexNameToId.TryGetValue(name, out id))
+                return indexDefinitions[id];
+            return null;
         }
-
 
         public IndexDefinition GetIndexDefinition(int id)
         {
@@ -255,7 +265,10 @@ namespace Raven.Database.Storage
 
         public TransformerDefinition GetTransformerDefinition(string name)
         {
-            return transformDefinitions.Values.FirstOrDefault(x => String.Compare(x.PublicName, name, StringComparison.OrdinalIgnoreCase) == 0);
+            int id = 0;
+            if (transformNameToId.TryGetValue(name, out id))
+                return transformDefinitions[id];
+            return null;
         }
 
         public TransformerDefinition GetTransformerDefinition(int id)
@@ -267,7 +280,10 @@ namespace Raven.Database.Storage
 
         public AbstractViewGenerator GetViewGenerator(string name)
         {
-            return indexCache.Values.FirstOrDefault(x => String.CompareOrdinal(x.Name, name) == 0);
+            int id = 0;
+            if (indexNameToId.TryGetValue(name, out id))
+                return indexCache[id];
+            return null;
         }
 
         public AbstractViewGenerator GetViewGenerator(int id)
@@ -292,7 +308,7 @@ namespace Raven.Database.Storage
 
         public bool Contains(string indexName)
         {
-            return indexDefinitions.Any(x => String.CompareOrdinal(x.Value.Name, indexName) == 0);
+            return indexNameToId.ContainsKey(indexName);
         }
 
         public string FixupIndexName(string index)
@@ -363,12 +379,14 @@ namespace Raven.Database.Storage
         public void RemoveTransformer(int id)
         {
             AbstractTransformer ignoredViewGenerator;
-            transformCache.TryRemove(id, out ignoredViewGenerator);
+            int ignoredId;
+            if (transformCache.TryRemove(id, out ignoredViewGenerator))
+                transformNameToId.TryRemove(ignoredViewGenerator.Name, out ignoredId);
             TransformerDefinition ignoredIndexDefinition;
             transformDefinitions.TryRemove(id, out ignoredIndexDefinition);
             if (configuration.RunInMemory)
                 return;
-            File.Delete(GetIndexSourcePath(id.ToString()) + ".transform");
+            File.Delete(GetIndexSourcePath(id) + ".transform");
         }
 
         public AbstractTransformer GetTransformer(int id)
@@ -381,7 +399,10 @@ namespace Raven.Database.Storage
 
         public AbstractTransformer GetTransformer(string name)
         {
-            return transformCache.Values.FirstOrDefault(x => String.Compare(x.Name, name, StringComparison.OrdinalIgnoreCase) == 0);
+            int id = 0;
+            if (transformNameToId.TryGetValue(name, out id))
+                return transformCache[id];
+            return null;
         }
 
 	    public int NextIndexId()
