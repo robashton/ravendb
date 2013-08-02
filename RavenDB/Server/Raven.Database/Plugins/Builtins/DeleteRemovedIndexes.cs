@@ -27,7 +27,7 @@ namespace Raven.Database.Plugins.Builtins
 					// index is not found on disk, better kill for good
 					// Even though technically we are running into a situation that is considered to be corrupt data
 					// we can safely recover from it by removing the other parts of the index.
-					database.IndexStorage.DeleteIndex(index.PublicName);
+					database.IndexStorage.DeleteIndex(index.Name);
 					actions.Indexing.DeleteIndex(id);
 				}
 			});

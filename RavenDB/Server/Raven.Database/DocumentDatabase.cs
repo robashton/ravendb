@@ -1170,7 +1170,7 @@ namespace Raven.Database
                     return name;
                 case IndexCreationOptions.Update:
                     // ensure that the code can compile
-                    new DynamicViewCompiler(definition.PublicName, definition, Extensions, IndexDefinitionStorage.IndexDefinitionsPath, Configuration).GenerateInstance();
+                    new DynamicViewCompiler(definition.Name, definition, Extensions, IndexDefinitionStorage.IndexDefinitionsPath, Configuration).GenerateInstance();
                     DeleteIndex(name);
                     break;
             }
@@ -1230,7 +1230,7 @@ namespace Raven.Database
 
         private IndexCreationOptions FindIndexCreationOptions(IndexDefinition definition, ref string name)
         {
-            definition.PublicName = name = IndexDefinitionStorage.FixupIndexName(name);
+            definition.Name = name = IndexDefinitionStorage.FixupIndexName(name);
             definition.IndexId = IndexDefinitionStorage.NextIndexId();
             definition.RemoveDefaultValues();
             IndexDefinitionStorage.ResolveAnalyzers(definition);

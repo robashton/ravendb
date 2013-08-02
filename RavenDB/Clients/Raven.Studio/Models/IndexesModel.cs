@@ -57,7 +57,7 @@ namespace Raven.Studio.Models
 			var currentSelection = ItemSelection.GetSelectedItems().Select(i => i.Name).ToHashSet();
 
 			var indexGroups = from index in indexes
-							  let groupDetails = GetIndexGroup(index.PublicName)
+							  let groupDetails = GetIndexGroup(index.Name)
 							  let indexGroup = groupDetails.Item1
 							  let indexOrder = groupDetails.Item2
 							  orderby indexOrder
@@ -65,7 +65,7 @@ namespace Raven.Studio.Models
 
 			var indexesAndGroupHeaders =
 				indexGroups.SelectMany(group => new IndexListItem[] {new IndexGroupHeader {Name = group.Key}}
-													.Concat(group.Select(index => new IndexItem {Name = index.PublicName, IndexStats = stats.Indexes.FirstOrDefault(x=>x.Id == index.IndexId)})));
+													.Concat(group.Select(index => new IndexItem {Name = index.Name, IndexStats = stats.Indexes.FirstOrDefault(x=>x.Id == index.IndexId)})));
 
 			GroupedIndexes.Clear();
 			GroupedIndexes.AddRange(indexesAndGroupHeaders.ToList());

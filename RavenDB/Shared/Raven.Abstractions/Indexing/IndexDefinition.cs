@@ -39,7 +39,7 @@ namespace Raven.Abstractions.Indexing
         /// <summary>
         /// This is the means by which the outside world refers to this index defiintion
         /// </summary>
-        public string PublicName { get; set; }
+        public string Name { get; set; }
 
 		/// <summary>
 		/// Get or set the index lock mode
@@ -254,7 +254,7 @@ namespace Raven.Abstractions.Indexing
 		{
 			get
 			{
-				var name = PublicName ?? string.Empty;
+				var name = Name ?? string.Empty;
 				if (name.StartsWith("Auto/", StringComparison.OrdinalIgnoreCase))
 					return "Auto";
 				if (IsCompiled)
@@ -299,7 +299,7 @@ namespace Raven.Abstractions.Indexing
 
 		public override string ToString()
 		{
-			return PublicName ?? Map;
+			return Name ?? Map;
 		}
 
 		public IndexDefinition Clone()
@@ -307,7 +307,7 @@ namespace Raven.Abstractions.Indexing
 			var indexDefinition = new IndexDefinition
 			{
 				IndexId = IndexId,
-        PublicName = PublicName,
+        Name = Name,
 				Reduce = Reduce,
 				TransformResults = TransformResults,
 				cachedHashCodeAsBytes = cachedHashCodeAsBytes

@@ -347,13 +347,13 @@ namespace Raven.Studio.Models
 
 		public string Name
 		{
-			get { return index.PublicName; }
+			get { return index.Name; }
 			set
 			{
-				if (index.PublicName != value)
+				if (index.Name != value)
 				{
-					MarkAsDirtyIfSignificant(index.PublicName, value);
-					index.PublicName = value;
+					MarkAsDirtyIfSignificant(index.Name, value);
+					index.Name = value;
 					OnPropertyChanged(() => Name);
 				}
 			}

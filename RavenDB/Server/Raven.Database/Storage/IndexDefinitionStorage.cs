@@ -119,7 +119,7 @@ namespace Raven.Database.Storage
 
         public string[] IndexNames
         {
-            get { return indexDefinitions.Values.OrderBy(x=>x.PublicName).Select(x=>x.PublicName).ToArray(); }
+            get { return indexDefinitions.Values.OrderBy(x=>x.Name).Select(x=>x.Name).ToArray(); }
         }
 
 	    public int[] Indexes
@@ -182,7 +182,7 @@ namespace Raven.Database.Storage
 
         private DynamicViewCompiler AddAndCompileIndex(IndexDefinition indexDefinition)
         {
-            var transformer = new DynamicViewCompiler(indexDefinition.PublicName, indexDefinition, extensions, path, configuration);
+            var transformer = new DynamicViewCompiler(indexDefinition.Name, indexDefinition, extensions, path, configuration);
             var generator = transformer.GenerateInstance();
             indexCache.AddOrUpdate(indexDefinition.IndexId, generator, (s, viewGenerator) => generator);
 
@@ -242,7 +242,7 @@ namespace Raven.Database.Storage
         
         public IndexDefinition GetIndexDefinition(string name)
         {
-            return indexDefinitions.Values.FirstOrDefault(x => String.Compare(x.PublicName, name, StringComparison.OrdinalIgnoreCase) == 0);
+            return indexDefinitions.Values.FirstOrDefault(x => String.Compare(x.Name, name, StringComparison.OrdinalIgnoreCase) == 0);
         }
 
 
@@ -280,7 +280,7 @@ namespace Raven.Database.Storage
 
         public IndexCreationOptions FindIndexCreationOptions(IndexDefinition indexDef)
         {
-            var indexDefinition = GetIndexDefinition(indexDef.PublicName);
+            var indexDefinition = GetIndexDefinition(indexDef.Name);
             if (indexDefinition != null)
             {
                 return indexDefinition.Equals(indexDef)
@@ -292,7 +292,7 @@ namespace Raven.Database.Storage
 
         public bool Contains(string indexName)
         {
-            return indexDefinitions.Any(x => String.CompareOrdinal(x.Value.PublicName, indexName) == 0);
+            return indexDefinitions.Any(x => String.CompareOrdinal(x.Value.Name, indexName) == 0);
         }
 
         public string FixupIndexName(string index)

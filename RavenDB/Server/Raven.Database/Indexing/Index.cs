@@ -137,7 +137,7 @@ namespace Raven.Database.Indexing
 			}
 		}
 
-	    public string PublicName { get { return this.indexDefinition.PublicName; } }
+	    public string PublicName { get { return this.indexDefinition.Name; } }
 
 	    public volatile bool IsMapIndexingInProgress;
 
@@ -375,7 +375,7 @@ namespace Raven.Database.Indexing
 					}
 					catch (Exception e)
 					{
-						context.AddError(indexId, indexDefinition.PublicName, "Creating Analyzer", e.ToString(), "Analyzer");
+						context.AddError(indexId, indexDefinition.Name, "Creating Analyzer", e.ToString(), "Analyzer");
 						throw;
 					}
 
@@ -406,7 +406,7 @@ namespace Raven.Database.Indexing
 						}
 						catch (Exception e)
 						{
-							context.AddError(indexId, indexDefinition.PublicName, null, e.ToString(), "Write");
+							context.AddError(indexId, indexDefinition.Name, null, e.ToString(), "Write");
 							throw;
 						}
 
@@ -566,7 +566,7 @@ namespace Raven.Database.Indexing
 				OnError = (exception, o) =>
 				{
 					context.AddError(indexId,
-                                     indexDefinition.PublicName,
+                                     indexDefinition.Name,
 									TryGetDocKey(o),
 									exception.Message,
 									"Map"
@@ -593,7 +593,7 @@ namespace Raven.Database.Indexing
 				OnError = (exception, o) =>
 				{
 					context.AddError(indexId,
-                                     indexDefinition.PublicName,
+                                     indexDefinition.Name,
 									TryGetDocKey(o),
 									exception.Message,
 									"Reduce"
@@ -620,7 +620,7 @@ namespace Raven.Database.Indexing
 				OnError = (exception, o) =>
 				{
 					context.AddError(indexId,
-                                     indexDefinition.PublicName,
+                                     indexDefinition.Name,
 									TryGetDocKey(o),
 									exception.Message,
 									"Reduce"

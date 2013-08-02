@@ -102,7 +102,7 @@ namespace Raven.Tests.Bugs.Indexing
 			{
 				var index = new IndexDefinition
 				{
-					PublicName = this.IndexName,
+					Name = this.IndexName,
 					Map =
 						@"
 		from doc in docs.WhereEntityIs(""Accounts"", ""Users"", ""Designs"")
