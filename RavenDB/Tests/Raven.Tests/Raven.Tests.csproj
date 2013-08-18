@@ -130,8 +130,9 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\packages\NLog.2.0.1.2\lib\net45\NLog.dll</HintPath>
     </Reference>
-    <Reference Include="Rhino.Mocks">
-      <HintPath>..\..\..\SharedLibs\Sources\managedesent-61618\External Components\Rhino.Mocks\Rhino.Mocks.dll</HintPath>
+    <Reference Include="Rhino.Mocks, Version=3.6.0.0, Culture=neutral, PublicKeyToken=0b3305902db7183f, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\packages\RhinoMocks.3.6.1\lib\net\Rhino.Mocks.dll</HintPath>
     </Reference>
     <Reference Include="Spatial4n.Core.NTS">
       <HintPath>..\..\..\SharedLibs\Spatial4n.Core.NTS.dll</HintPath>
@@ -143,6 +144,7 @@
     <Reference Include="System.Core">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
+    <Reference Include="System.Linq" />
     <Reference Include="System.Net" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Reactive.Core">
@@ -558,6 +560,7 @@
     <Compile Include="Issues\BulkInsertAuth.cs" />
     <Compile Include="Issues\BulkInsertClient.cs" />
     <Compile Include="Issues\BulkInsertDatabaseUrl.cs" />
+    <Compile Include="Issues\NestedPropertiesIndex_1182.cs" />
     <Compile Include="Issues\RavenDB1019.cs" />
     <Compile Include="Issues\RavenDB1025.cs" />
     <Compile Include="Issues\RavenDB1067.cs" />
@@ -603,6 +606,7 @@
     <Compile Include="Issues\RavenDB_895.cs" />
     <Compile Include="Issues\RavenDB_967.cs" />
     <Compile Include="Issues\RavenDB_993.cs" />
+    <Compile Include="Issues\RavenDB_999.cs" />
     <Compile Include="Issues\SlowIndex.cs" />
     <Compile Include="Json\SupportForJsonPropertyAttribute.cs" />
     <Compile Include="LicenseProviderPluginTest.cs" />
