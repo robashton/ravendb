@@ -21,7 +21,7 @@ namespace Raven.Storage.Esent.StorageActions
 			using (var update = new Update(session, Tasks, JET_prep.Insert))
 			{
 				Api.SetColumn(session, Tasks, tableColumnsCache.TasksColumns["task"], task.AsBytes());
-				Api.SetColumn(session, Tasks, tableColumnsCache.TasksColumns["for_index"], task.Index.ToString(), Encoding.Unicode);
+				Api.SetColumn(session, Tasks, tableColumnsCache.TasksColumns["for_index"], task.Index);
 				Api.SetColumn(session, Tasks, tableColumnsCache.TasksColumns["task_type"], task.GetType().FullName, Encoding.Unicode);
 				Api.SetColumn(session, Tasks, tableColumnsCache.TasksColumns["added_at"], addedAt.ToBinary());
 
@@ -110,7 +110,7 @@ namespace Raven.Storage.Esent.StorageActions
 			do
 			{
 				// esent index ranges are approximate, and we need to check them ourselves as well
-				if (Api.RetrieveColumnAsString(session, Tasks, tableColumnsCache.TasksColumns["for_index"]) != task.Index.ToString())
+				if (Api.RetrieveColumnAsInt64(session, Tasks, tableColumnsCache.TasksColumns["for_index"]) != task.Index)
 					continue;
 				if (Api.RetrieveColumnAsString(session, Tasks, tableColumnsCache.TasksColumns["task_type"]) != expectedTaskType)
 					continue;
