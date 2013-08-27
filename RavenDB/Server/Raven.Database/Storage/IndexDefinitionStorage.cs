@@ -207,10 +207,10 @@ namespace Raven.Database.Storage
             return transformer;
         }
 
-		public void RegisterNewIndexInThisSession(string name, IndexDefinition definition)
-		{
-			newDefinitionsThisSession.TryAdd(definition.IndexId, definition);
-		}
+        public void RegisterNewIndexInThisSession(string name, IndexDefinition definition)
+        {
+          newDefinitionsThisSession.TryAdd(definition.IndexId, definition);
+        }
 
         public void AddIndex(int id, IndexDefinition definition)
         {
