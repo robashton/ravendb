@@ -43,9 +43,9 @@ namespace Raven.Storage.Esent.SchemaUpdates.Updates
 		    {
 		        using (var sr = new Table(session, dbid, table, OpenTableGrbit.None)) 
                 {
-                    Api.JetRenameColumn(session, sr, "view", "view_old", RenameColumnGrbit.None);
+                    //Api.JetRenameColumn(session, sr, "view", "view_old", RenameColumnGrbit.None);
                     JET_COLUMNID columnid;
-                    Api.JetAddColumn(session, sr, "view", new JET_COLUMNDEF
+                    Api.JetAddColumn(session, sr, "view_new", new JET_COLUMNDEF
                     {
                         coltyp = JET_coltyp.Long,
                         grbit = ColumndefGrbit.ColumnFixed | ColumndefGrbit.ColumnNotNULL
