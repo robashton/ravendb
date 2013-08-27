@@ -160,7 +160,6 @@ namespace Raven.Database.Storage
 	        if (configuration.RunInMemory)
 		        return;
             var indexName = Path.Combine(path, indexDefinition.IndexId + ".index");
-            // Hash the name if it's too long (as a path)
             File.WriteAllText(indexName, JsonConvert.SerializeObject(indexDefinition, Formatting.Indented, Default.Converters));
         }
 
@@ -170,7 +169,6 @@ namespace Raven.Database.Storage
             if (configuration.RunInMemory == false)
             {
                 var indexName = Path.Combine(path, transformerDefinition.IndexId + ".transform");
-                // Hash the name if it's too long (as a path)
                 File.WriteAllText(indexName, JsonConvert.SerializeObject(transformerDefinition, Formatting.Indented, Default.Converters));
             }
             return transformer.Name;
