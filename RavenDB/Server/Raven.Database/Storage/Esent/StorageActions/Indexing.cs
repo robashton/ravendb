@@ -196,7 +196,7 @@ namespace Raven.Storage.Esent.StorageActions
 				var columnids = Api.GetColumnDictionary(session, op.Table);
 				do
 				{
-					var indexNameFromDb = Api.RetrieveColumnAsInt64(session, op.Table, columnids["view"]);
+					var indexNameFromDb = Api.RetrieveColumnAsInt32(session, op.Table, columnids["view"]);
 					if (id != indexNameFromDb)
 						break;
 					MaybePulseTransaction();

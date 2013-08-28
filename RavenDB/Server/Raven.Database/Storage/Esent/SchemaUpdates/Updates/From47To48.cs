@@ -129,13 +129,6 @@ namespace Raven.Storage.Esent.SchemaUpdates.Updates
                             {
                                 var defaultValue = column.DefaultValue == null ? null : column.DefaultValue.ToArray();
                                 var defaultValueLength = defaultValue == null ? 0 : defaultValue.Length;
-                                if (columnDef.grbit.HasFlag(ColumndefGrbit.ColumnAutoincrement))
-                                {
-                                    columnDef.grbit &= ~ColumndefGrbit.ColumnAutoincrement;
-                                    Api.JetAddColumn(session, newTableId, column.Name, columnDef, defaultValue,
-                                                     defaultValueLength, out newColumndId);
-                                }
-                                else
                                 {
                                     Api.JetAddColumn(session, newTableId, column.Name, columnDef, defaultValue,
                                                      defaultValueLength, out newColumndId);

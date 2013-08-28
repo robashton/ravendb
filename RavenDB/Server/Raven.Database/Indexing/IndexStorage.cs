@@ -642,18 +642,23 @@ namespace Raven.Database.Indexing
 		public void DeleteIndex(string name)
 		{
 		    var value = TryIndexByName(name);
+            DeleteIndex(value.indexId);
+		}
+		public void DeleteIndex(int id)
+		{
+		    var value = GetIndexInstance(id);
 			if (value == null)
 			{
-				log.Debug("Ignoring delete for non existing index {0}", name);
+				log.Debug("Ignoring delete for non existing index {0}", value.PublicName);
 				return;
 			}
-			log.Debug("Deleting index {0}", name);
+			log.Debug("Deleting index {0}", value.PublicName);
 			value.Dispose();
 			Index ignored;
 			var dirOnDisk = Path.Combine(path, value.indexId.ToString());
 
 			documentDatabase.TransactionalStorage.Batch(accessor =>
-				accessor.Lists.Remove("Raven/Indexes/QueryTime", name));
+				accessor.Lists.Remove("Raven/Indexes/QueryTime", value.PublicName));
 
 			if (!indexes.TryRemove(value.indexId, out ignored) || !Directory.Exists(dirOnDisk))
 				return;
