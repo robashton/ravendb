@@ -35,65 +35,6 @@ namespace Raven.Storage.Esent.SchemaUpdates.Updates
 
 		public void Update(Session session, JET_DBID dbid, Action<string> output)
 		{
-            //SCheduledReductionsTable
-            // "scheduled_reductions",
-            //    view
-            //MapResultsTable
-            //mapped_results
-            //    view
-            //ReduceResultsTable
-            //reduce_results
-            //    view
-            //ReduceKeysCountsTable
-            // reduce_keys_counts
-            //    view
-            //ReduceKeysStatusTable
-            // reduce_keys_status
-            //    view
-            //IndexedDocumentsReferencesTable
-            // indexed_documents_references
-            //    view
-            // indexes_stats
-            //   key
-            //indexes_etag
-            //   key
-            //indexes_stats_reduce
-            //   key
-            //tasks
-            //   for_index
-
-
-
-		    var tablesAndColumns = new[]
-		    {
-		        new {table = "scheduled_reductions", column = "view"},
-		        new {table = "mapped_results", column = "view"},
-		        new {table = "reduce_results", column = "view"},
-		        new {table = "reduce_keys_counts", column = "view"},
-		        new {table = "reduce_keys_status", column = "view"},
-		        new {table = "indexed_documents_references", column = "view"},
-		        new {table = "tasks", column = "for_index"},
-		        new {table = "indexes_stats", column = "key"},
-		        new {table = "indexes_etag", column = "key"},
-		        new {table = "indexes_stats_reduce", column = "key"}
-		    };
-
-            foreach(var item in tablesAndColumns)
-            {
-                Api.JetCommitTransaction(session, CommitTransactionGrbit.None);
-                using (var sr = new Table(session, dbid, item.table, OpenTableGrbit.None)) 
-                {
-                    Api.JetRenameColumn(session, sr, item.column, item.column + "_old", RenameColumnGrbit.None);
-                    JET_COLUMNID columnid;
-                    Api.JetAddColumn(session, sr, item.column, new JET_COLUMNDEF
-                    {
-                        coltyp = JET_coltyp.Long,
-                        grbit = ColumndefGrbit.ColumnFixed | ColumndefGrbit.ColumnNotNULL
-                    }, null, 0, out columnid);
-                }
-
-                Api.JetBeginTransaction2(session, BeginTransactionGrbit.None);
-            }
 
             // So first we allocate ids and crap
             // and write that to disk in a safe manner
@@ -140,65 +81,176 @@ namespace Raven.Storage.Esent.SchemaUpdates.Updates
                 File.WriteAllText(path, JsonConvert.SerializeObject(definition, Formatting.Indented, Default.Converters));
 		    }
 
-
-            // Now we need to go through all the tables and do a look-up of 'view' to 'id' and write that data
-		    foreach (var item in tablesAndColumns)
+		    var tablesAndColumns = new[]
 		    {
-		        using (var table = new Table(session, dbid, item.table, OpenTableGrbit.None))
-		        {
-		            var rows = 0;
-		            Api.MoveBeforeFirst(session, table);
-		            while (Api.TryMoveNext(session, table))
-		            {
-		                var viewNameId = Api.GetTableColumnid(session, table, item.column + "_old");
-		                var viewIdId = Api.GetTableColumnid(session, table,item.column);
+		        new {table = "scheduled_reductions", column = "view"},
+		        new {table = "mapped_results", column = "view"},
+		        new {table = "reduce_results", column = "view"},
+		        new {table = "reduce_keys_counts", column = "view"},
+		        new {table = "reduce_keys_status", column = "view"},
+		        new {table = "indexed_documents_references", column = "view"},
+		        new {table = "tasks", column = "for_index"},
+		        new {table = "indexes_stats", column = "key"},
+		        new {table = "indexes_etag", column = "key"},
+		        new {table = "indexes_stats_reduce", column = "key"}
+		    };
 
-		                using (var update = new Update(session, table, JET_prep.Replace))
-		                {
-		                    var viewName = Api.RetrieveColumnAsString(session, table, viewNameId, Encoding.Unicode);
-		                    Api.SetColumn(session, table, viewIdId, nameToIds[viewName]); 
-		                    update.Save();
-		                }
+            foreach(var item in tablesAndColumns)
+            {
+                // If it's the primary key we need to be a bit clever
+                // cos we can't just rename this and copy data over
+                // cos indexes
+                if (item.column == "key")
+                {
+                    var newTable = item.table + "_new";
+                    JET_TABLEID newTableId;
 
-		                if (rows++%10000 == 0)
-		                {
-		                    output("Processed " + (rows - 1) + " rows in " + item.table);
-		                    continue;
-		                }
-		            }
-
-                    foreach (var index in Api.GetTableIndexes(session, table))
+                    using (var sr = new Table(session, dbid, item.table, OpenTableGrbit.None))
                     {
-                        if (index.IndexSegments.Any(x => x.ColumnName == item.column + "_old"))
+                        Api.JetCreateTable(session, dbid, newTable, 1, 80, out newTableId);
+                        var existingColumns = Api.GetTableColumns(session, sr);
+                        var existingIndexes = Api.GetTableIndexes(session, sr);
+
+                        foreach (var column in existingColumns)
                         {
-                            if (index.Grbit.HasFlag(CreateIndexGrbit.IndexPrimary))
+                            JET_COLUMNDEF columnDef = null;
+                            Api.JetGetColumnInfo(session, dbid, item.table, column.Name, out columnDef);
+                            JET_COLUMNID newColumndId;
+
+                            if (column.Name == item.column)
                             {
-                                SchemaCreator.CreateIndexes(session, table,
-                                    new JET_INDEXCREATE() {
-                                        szIndexName = index.Name,
-                                        szKey = String.Format("+{0}\0\0", item.column),
-                                        grbit = CreateIndexGrbit.IndexPrimary | CreateIndexGrbit.IndexUnique
-                                    });
+                                Api.JetAddColumn(session, newTableId, item.column, new JET_COLUMNDEF
+                                {
+                                    coltyp = JET_coltyp.Long,
+                                    grbit = ColumndefGrbit.ColumnFixed | ColumndefGrbit.ColumnNotNULL
+                                }, null, 0, out newColumndId);
                             }
                             else
                             {
-                                Api.JetDeleteIndex(session, table, index.Name);
-                                var indexKeys = string.Join("", index.IndexSegments.Select(x => string.Format("+{0}\0", x.ColumnName))) + "\0";
-                                indexKeys = indexKeys.Replace("_old", "");
-                                SchemaCreator.CreateIndexes(session, table,
-                                    new JET_INDEXCREATE {
-                                        szIndexName = index.Name,
-                                        szKey = indexKeys
-                                    });
+                                var defaultValue = column.DefaultValue == null ? null : column.DefaultValue.ToArray();
+                                var defaultValueLength = defaultValue == null ? 0 : defaultValue.Length;
+                                if (columnDef.grbit.HasFlag(ColumndefGrbit.ColumnAutoincrement))
+                                {
+                                    columnDef.grbit &= ~ColumndefGrbit.ColumnAutoincrement;
+                                    Api.JetAddColumn(session, newTableId, column.Name, columnDef, defaultValue,
+                                                     defaultValueLength, out newColumndId);
+                                }
+                                else
+                                {
+                                    Api.JetAddColumn(session, newTableId, column.Name, columnDef, defaultValue,
+                                                     defaultValueLength, out newColumndId);
                                 }
                             }
-                    }
+                        }
 
+                        foreach (var index in existingIndexes)
+                        {
+                            var indexDesc = String.Join("\0", index.IndexSegments.Select(x => "+" + x.ColumnName)) +
+                                            "\0\0";
+                            SchemaCreator.CreateIndexes(session, newTableId, new JET_INDEXCREATE()
+                            {
+                                szIndexName = index.Name,
+                                szKey = indexDesc,
+                                grbit = index.Grbit
+                            });
+                        }
+
+                        var rows = 0;
+
+
+                        using (var destTable = new Table(session, dbid, newTable, OpenTableGrbit.None))
+                        {
+                            Api.MoveBeforeFirst(session, sr);
+                            Api.MoveBeforeFirst(session, destTable);
+
+                            while (Api.TryMoveNext(session, sr))
+                            {
+                                using (var insert = new Update(session, destTable, JET_prep.Insert))
+                                {
+                                    foreach (var column in existingColumns)
+                                    {
+                                        var destcolumn = Api.GetTableColumnid(session, destTable, column.Name);
+                                        if (column.Name == item.column)
+                                        {
+                                            var viewName = Api.RetrieveColumnAsString(session, sr, column.Columnid,
+                                                                                      Encoding.Unicode);
+                                            Api.SetColumn(session, destTable, destcolumn, nameToIds[viewName]);
+                                        }
+                                        else
+                                        {
+                                            var value = Api.RetrieveColumn(session, sr, column.Columnid);
+                                            Api.SetColumn(session, destTable, destcolumn, value);
+                                        }
+                                    }
+                                    insert.Save();
+                                }
+
+                                if (rows++%10000 == 0)
+                                {
+                                    output("Processed " + (rows - 1) + " rows in " + item.table);
+                                    continue;
+                                }
+                            }
+                        }
+                    }
                     Api.JetCommitTransaction(session, CommitTransactionGrbit.None);
-                    Api.JetDeleteColumn(session, table, item.table + "_old");
+                    Api.JetDeleteTable(session, dbid, item.table);
+                    Api.JetRenameTable(session, dbid, newTable, item.table);
                     Api.JetBeginTransaction2(session, BeginTransactionGrbit.None);
-		        }
-		    }
+                }
+                else
+                {
+                    // We can do an in-place update
+                    Api.JetCommitTransaction(session, CommitTransactionGrbit.None);
+                    using (var sr = new Table(session, dbid, item.table, OpenTableGrbit.None)) {
+                        Api.JetRenameColumn(session, sr, item.column, item.column + "_old", RenameColumnGrbit.None);
+                        JET_COLUMNID columnid;
+                        Api.JetAddColumn(session, sr, item.column, new JET_COLUMNDEF {
+                            coltyp = JET_coltyp.Long,
+                            grbit = ColumndefGrbit.ColumnFixed | ColumndefGrbit.ColumnNotNULL
+                        }, null, 0, out columnid);
+
+                    Api.JetBeginTransaction2(session, BeginTransactionGrbit.None);
+
+                        var rows = 0;
+                        Api.MoveBeforeFirst(session, sr);
+                        while (Api.TryMoveNext(session, sr)) {
+                            var viewNameId = Api.GetTableColumnid(session, sr, item.column + "_old");
+                            var viewIdId = Api.GetTableColumnid(session, sr, item.column);
+
+                            using (var update = new Update(session, sr, JET_prep.Replace)) {
+                                var viewName = Api.RetrieveColumnAsString(session, sr, viewNameId, Encoding.Unicode);
+                                Api.SetColumn(session, sr, viewIdId, nameToIds[viewName]);
+                                update.Save();
+                            }
+
+                            if (rows++ % 10000 == 0) {
+                                output("Processed " + (rows - 1) + " rows in " + item.table);
+                                continue;
+                            }
+                        }
+
+                        foreach (var index in Api.GetTableIndexes(session, sr))
+                        {
+                            if (index.IndexSegments.Any(x => x.ColumnName == item.column + "_old"))
+                            {
+                                Api.JetDeleteIndex(session, sr, index.Name);
+                                var indexKeys = string.Join("", index.IndexSegments.Select(x => string.Format("+{0}\0", x.ColumnName))) + "\0";
+                                indexKeys = indexKeys.Replace("_old", "");
+                                SchemaCreator.CreateIndexes(session, sr, new JET_INDEXCREATE
+                                                            {
+                                                                szIndexName = index.Name,
+                                                                szKey = indexKeys
+                                                            });
+                            }
+                        }
+
+                        Api.JetCommitTransaction(session, CommitTransactionGrbit.None);
+                        Api.JetDeleteColumn(session, sr, item.column + "_old");
+                        Api.JetBeginTransaction2(session, BeginTransactionGrbit.None);
+                    }
+                }
+            }
 
             filesToDelete.ForEach(File.Delete);
 			SchemaCreator.UpdateVersion(session, dbid, "4.8");

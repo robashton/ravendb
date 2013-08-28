@@ -94,7 +94,7 @@ namespace Raven.Storage.Esent
 			Api.JetAddColumn(session, tableid, "key", new JET_COLUMNDEF
 			{
 			    coltyp = JET_coltyp.Long,
-          grbit = ColumndefGrbit.ColumnFixed | ColumndefGrbit.ColumnNotNULL 
+                  grbit = ColumndefGrbit.ColumnFixed | ColumndefGrbit.ColumnNotNULL 
 			}, null, 0, out columnid);
 
 			var defaultValue = BitConverter.GetBytes(0);
